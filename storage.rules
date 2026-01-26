@@ -1,0 +1,13 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /signatures/{fileName} {
+      // 允許上傳，但必須符合條件
+      allow write: if request.resource.size < 1 * 1024 * 1024 // 限制小於 1MB
+                   && request.resource.contentType == 'image/png'; // 限制為 PNG 圖片
+                   
+      // 允許任何人讀取圖片
+      allow read: if true;
+    }
+  }
+}
