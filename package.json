@@ -13,20 +13,27 @@
     "deploy": "gh-pages -d dist"
   },
   "dependencies": {
+    "@emailjs/browser": "^4.4.1",
     "@fontsource/nunito": "^5.2.7",
     "@fontsource/quicksand": "^5.2.10",
     "@tailwindcss/postcss": "^4.1.18",
+    "@types/file-saver": "^2.0.7",
     "autoprefixer": "^10.4.23",
     "canvas-confetti": "^1.9.4",
+    "file-saver": "^2.0.5",
     "firebase": "^12.8.0",
     "framer-motion": "^12.29.0",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.0.0",
+    "jszip": "^3.10.1",
     "lucide-react": "^0.563.0",
     "postcss": "^8.5.6",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.0",
     "react-signature-canvas": "^1.1.0-alpha.2",
-    "tailwindcss": "^4.1.18"
+    "tailwindcss": "^4.1.18",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

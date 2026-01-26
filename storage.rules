@@ -9,5 +9,11 @@ service firebase.storage {
       // 允許任何人讀取圖片
       allow read: if true;
     }
+    
+    match /consents/{fileName} {
+      allow write: if request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType == 'application/pdf';
+      allow read: if true;
+    }
   }
 }

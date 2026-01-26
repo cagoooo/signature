@@ -36,12 +36,23 @@ function Home() {
         </main>
 
         <motion.footer
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1, duration: 1 }}
-          className="mt-12 text-center text-sm text-gray-500 font-medium"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5, duration: 0.8 }}
+          className="mt-16 mb-8 flex justify-center"
         >
-          &copy; {new Date().getFullYear()} 學校行政單位 | Designed with 🌈 & ❤️
+          <div className="bg-white/60 backdrop-blur-md border border-white/50 rounded-full px-6 py-3 shadow-sm flex flex-col md:flex-row items-center justify-center gap-2 md:gap-4 hover:shadow-md transition-all duration-300 hover:scale-105">
+            <span className="text-gray-600 font-bold text-sm bg-clip-text text-transparent bg-gradient-to-r from-gray-600 to-gray-800">
+              &copy; {new Date().getFullYear()} 學校行政單位
+            </span>
+            <span className="hidden md:block text-gray-300">|</span>
+            <span className="flex items-center gap-1.5 text-sm font-medium text-gray-500">
+              Designed with 
+              <span className="animate-bounce inline-block filter drop-shadow-sm">🌈</span> 
+              & 
+              <span className="animate-pulse inline-block text-red-500 filter drop-shadow-sm">❤️</span>
+            </span>
+          </div>
         </motion.footer>
 
         {/* Admin Shortcut */}
