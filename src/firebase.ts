@@ -2,6 +2,7 @@ import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getAuth } from "firebase/auth";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
 const firebaseConfig = {
     apiKey: "AIzaSyBOw3j4xW-xN-eqGXJ4a38r5duHJ5SjzWk",
@@ -13,6 +14,26 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+
+// Initialize App Check
+// TODO: Replace "YOUR_RECAPTCHA_SITE_KEY" with your actual reCAPTCHA v3 site key
+// You can get one at https://www.google.com/recaptcha/admin/create
+// Make sure to register "localhost" and "cagoooo.github.io" in the reCAPTCHA admin console.
+if (typeof window !== 'undefined') {
+    // Only initialize in browser environment
+    // Use a try-catch block to prevent app crash if key is missing or invalid
+    try {
+        initializeAppCheck(app, {
+            provider: new ReCaptchaV3Provider('YOUR_RECAPTCHA_SITE_KEY'),
+            isTokenAutoRefreshEnabled: true
+        });
+        console.log("App Check initialized");
+    } catch (e) {
+        console.warn("App Check initialization failed (likely missing site key):", e);
+    }
+}
+
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 export const auth = getAuth(app);
+

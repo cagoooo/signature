@@ -4,20 +4,25 @@ service cloud.firestore {
     match /signatures/{document=**} {
       // 允許任何人新增資料，但必須符合格式
       allow create: if isValidSignature(request.resource.data);
-      // 只有驗證過的管理員可以讀取、修改或刪除
-      allow read, update, delete: if request.auth != null;
+      // 禁止修改已存在的資料 (Immutable)
+      allow update: if false;
+      // 只有驗證過的管理員可以讀取或刪除
+      allow read, delete: if request.auth != null;
     }
 
     function isValidSignature(data) {
-      return data.keys().hasAll(['studentName', 'parentName', 'grade', 'cls', 'seat', 'signatureUrl', 'timestamp']) &&
+      let hasRequiredFields = data.keys().hasAll(['studentName', 'parentName', 'grade', 'cls', 'seat', 'signatureUrl', 'timestamp']);
+      let emailValid = !('email' in data) || (data.email is string && data.email.matches('^[^@]+@[^@]+\\.[a-zA-Z]{2,}$'));
+      
+      return hasRequiredFields &&
              data.studentName is string && data.studentName.size() > 0 &&
              data.parentName is string && data.parentName.size() > 0 &&
-             // 雖然前端傳字串，但為了保險起見，這裡檢查是否為字串 (因為前端表單傳的是 string)
              data.grade is string && data.grade.matches('^[0-9]+$') &&
              data.cls is string && data.cls.matches('^[0-9]+$') &&
              data.seat is string && data.seat.matches('^[0-9]+$') &&
              data.signatureUrl is string &&
-             data.timestamp is timestamp;
+             data.timestamp is timestamp &&
+             emailValid;
     }
   }
 }
