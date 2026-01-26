@@ -1,7 +1,7 @@
 {
   "name": "signature-app",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "homepage": "https://cagoooo.github.io/signature",
   "type": "module",
   "scripts": {
