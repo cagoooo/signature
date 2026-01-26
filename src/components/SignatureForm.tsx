@@ -108,7 +108,7 @@ const SignatureForm: React.FC = () => {
             const fileName = `${formData.grade}_${formData.cls}_${formData.seat}_${formData.studentName}_${formData.parentName}_${timestamp}.png`;
             const storageRef = ref(storage, `signatures/${fileName}`);
 
-            await uploadBytes(storageRef, blob);
+            await uploadBytes(storageRef, blob, { contentType: 'image/png' });
             const downloadURL = await getDownloadURL(storageRef);
 
             await addDoc(collection(db, "signatures"), {
