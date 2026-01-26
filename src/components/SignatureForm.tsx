@@ -4,10 +4,11 @@ import { db, storage } from '../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { motion } from 'framer-motion';
-import { CheckCircle, Loader2, Eraser, PenTool, AlertCircle, User, GraduationCap, Users, Hash, FileText, Mail } from 'lucide-react';
+import { CheckCircle, Loader2, Eraser, PenTool, AlertCircle, User, GraduationCap, Users, Hash, FileText, Mail, Undo } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { generateConsentPDF } from '../utils/pdfGenerator';
 import { sendConsentEmail } from '../utils/emailService';
+import LoadingOverlay from './LoadingOverlay';
 
 interface FormData {
     grade: string;
@@ -29,12 +30,16 @@ const SignatureForm: React.FC = () => {
         email: '',
     });
     const [loading, setLoading] = useState(false);
+    const [loadingMessage, setLoadingMessage] = useState('處理中...');
     const [submitted, setSubmitted] = useState(false);
     const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
 
+    // Pen Settings
+    const [penColor, setPenColor] = useState('black');
+    const [penWidth, setPenWidth] = useState(2.5);
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
-        // 限制年級、班級、座號只能輸入數字
         if (['grade', 'cls', 'seat'].includes(name)) {
             if (value === '' || /^\d+$/.test(value)) {
                 setFormData({ ...formData, [name]: value });
@@ -48,20 +53,24 @@ const SignatureForm: React.FC = () => {
         sigCanvas.current?.clear();
     };
 
+    const undoSignature = () => {
+        const data = sigCanvas.current?.toData();
+        if (data) {
+            data.pop(); // Remove the last stroke
+            sigCanvas.current?.fromData(data);
+        }
+    };
+
     const triggerConfetti = () => {
         const duration = 3 * 1000;
         const animationEnd = Date.now() + duration;
         const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
-
         const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
-
         const interval: any = setInterval(function () {
             const timeLeft = animationEnd - Date.now();
-
             if (timeLeft <= 0) {
                 return clearInterval(interval);
             }
-
             const particleCount = 50 * (timeLeft / duration);
             confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
             confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
@@ -76,7 +85,6 @@ const SignatureForm: React.FC = () => {
             return;
         }
 
-        // 檢查簽名複雜度 (防止只點一點)
         const data: any = sigCanvas.current?.toData();
         if (!data || data.length === 0 || (data.length === 1 && data[0]?.points?.length < 5)) {
             alert('簽名過於簡單，請簽署全名。');
@@ -84,9 +92,9 @@ const SignatureForm: React.FC = () => {
         }
 
         setLoading(true);
+        setLoadingMessage('正在處理簽名圖片...');
 
         try {
-            // 優化圖片：繪製到固定大小的 Canvas
             const originalCanvas = sigCanvas.current?.getCanvas();
             if (!originalCanvas) return;
 
@@ -98,17 +106,13 @@ const SignatureForm: React.FC = () => {
             const ctx = tempCanvas.getContext('2d');
 
             if (ctx) {
-                // 保持透明背景，或設為白色 (視需求而定，這裡保持透明)
-                // ctx.fillStyle = '#ffffff';
-                // ctx.fillRect(0, 0, targetWidth, targetHeight);
-
-                // 將原始簽名縮放繪製到新 Canvas
                 ctx.drawImage(originalCanvas, 0, 0, targetWidth, targetHeight);
             }
 
             const blob = await new Promise<Blob | null>(resolve => tempCanvas.toBlob(resolve, 'image/png'));
             if (!blob) throw new Error("無法產生圖片");
 
+            setLoadingMessage('正在上傳簽名...');
             const timestamp = Date.now();
             const fileName = `${formData.grade}_${formData.cls}_${formData.seat}_${formData.studentName}_${formData.parentName}_${timestamp}.png`;
             const storageRef = ref(storage, `signatures/${fileName}`);
@@ -117,6 +121,7 @@ const SignatureForm: React.FC = () => {
             const downloadURL = await getDownloadURL(storageRef);
             setSignatureUrl(downloadURL);
 
+            setLoadingMessage('正在儲存資料...');
             await addDoc(collection(db, "signatures"), {
                 ...formData,
                 signatureUrl: downloadURL,
@@ -124,7 +129,7 @@ const SignatureForm: React.FC = () => {
                 userAgent: navigator.userAgent
             });
 
-            // Generate PDF Blob and Upload
+            setLoadingMessage('正在生成 PDF 同意書...');
             let pdfUrl = '';
             try {
                 const pdfBlob = await generateConsentPDF({
@@ -134,6 +139,7 @@ const SignatureForm: React.FC = () => {
                 }, { returnBlob: true });
 
                 if (pdfBlob && pdfBlob instanceof Blob) {
+                    setLoadingMessage('正在上傳 PDF...');
                     const pdfFileName = `${formData.grade}_${formData.cls}_${formData.seat}_${formData.studentName}_同意書_${timestamp}.pdf`;
                     const pdfStorageRef = ref(storage, `consents/${pdfFileName}`);
                     await uploadBytes(pdfStorageRef, pdfBlob, { contentType: 'application/pdf' });
@@ -141,11 +147,10 @@ const SignatureForm: React.FC = () => {
                 }
             } catch (pdfError) {
                 console.error("Error generating/uploading PDF:", pdfError);
-                // Continue even if PDF fails, so we at least send the email
             }
 
-            // Send Email Notification
             if (formData.email) {
+                setLoadingMessage('正在寄送通知信...');
                 await sendConsentEmail({
                     to_email: formData.email,
                     to_name: formData.parentName,
@@ -226,6 +231,8 @@ const SignatureForm: React.FC = () => {
             onSubmit={handleSubmit}
             className="space-y-6 md:space-y-8 bg-white/80 backdrop-blur-xl p-5 md:p-10 rounded-[2rem] shadow-2xl border border-white/60 relative overflow-hidden"
         >
+            <LoadingOverlay isLoading={loading} message={loadingMessage} />
+
             {/* Top Gradient Border */}
             <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-vibrant-blue via-vibrant-purple to-vibrant-pink"></div>
 
@@ -248,7 +255,7 @@ const SignatureForm: React.FC = () => {
                     {/* Text Content */}
                     <div className="text-base md:text-xl text-gray-800 leading-loose font-medium tracking-wide text-justify md:text-left">
                         <strong className="hidden md:block mb-3 text-vibrant-orange text-2xl md:text-3xl font-heading">同意書內容</strong>
-                        本人同意 貴校於教育活動範圍內，拍攝、錄影及使用本人子女之肖像（包含照片及動態影像），並授權 貴校用於教育推廣、成果發表及校園網頁等非營利目的。
+                        本人同意 貴校於教育活動範圍內，拍攝、錄影及使用本人子女之肖像（包含照片及動態影像），並授權 貴校用於教育推廣、成果發表、校園網頁等非營利目的。
                     </div>
                 </div>
             </div>
@@ -300,12 +307,35 @@ const SignatureForm: React.FC = () => {
 
             {/* Signature Area */}
             <div className="space-y-4">
-                <label className="flex items-center gap-3 text-gray-700 font-bold text-xl">
-                    <div className="bg-vibrant-orange/10 p-2 rounded-lg text-vibrant-orange">
-                        <PenTool size={24} />
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <label className="flex items-center gap-3 text-gray-700 font-bold text-xl">
+                        <div className="bg-vibrant-orange/10 p-2 rounded-lg text-vibrant-orange">
+                            <PenTool size={24} />
+                        </div>
+                        請在此簽名
+                    </label>
+
+                    {/* Pen Tools */}
+                    <div className="flex items-center gap-2 bg-gray-100 p-2 rounded-xl self-start md:self-auto">
+                        <div className="flex gap-1 border-r border-gray-300 pr-2 mr-2">
+                            <button type="button" onClick={() => setPenColor('black')} className={`w-8 h-8 rounded-full bg-black border-2 ${penColor === 'black' ? 'border-blue-500 scale-110' : 'border-transparent'}`} title="黑色"></button>
+                            <button type="button" onClick={() => setPenColor('blue')} className={`w-8 h-8 rounded-full bg-blue-600 border-2 ${penColor === 'blue' ? 'border-blue-500 scale-110' : 'border-transparent'}`} title="藍色"></button>
+                            <button type="button" onClick={() => setPenColor('red')} className={`w-8 h-8 rounded-full bg-red-600 border-2 ${penColor === 'red' ? 'border-blue-500 scale-110' : 'border-transparent'}`} title="紅色"></button>
+                        </div>
+                        <div className="flex gap-1 items-center">
+                            <button type="button" onClick={() => setPenWidth(1)} className={`p-2 rounded-lg ${penWidth === 1 ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`} title="細">
+                                <div className="w-4 h-0.5 bg-gray-600"></div>
+                            </button>
+                            <button type="button" onClick={() => setPenWidth(2.5)} className={`p-2 rounded-lg ${penWidth === 2.5 ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`} title="中">
+                                <div className="w-4 h-1 bg-gray-600"></div>
+                            </button>
+                            <button type="button" onClick={() => setPenWidth(5)} className={`p-2 rounded-lg ${penWidth === 5 ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`} title="粗">
+                                <div className="w-4 h-2 bg-gray-600"></div>
+                            </button>
+                        </div>
                     </div>
-                    請在此簽名
-                </label>
+                </div>
+
                 <div className="relative group">
                     <div className="border-4 border-dashed border-orange-200 rounded-3xl overflow-hidden bg-orange-50/30 group-hover:border-vibrant-orange group-hover:bg-orange-50/50 transition-all duration-300 touch-none shadow-inner relative">
                         {/* Background Pattern */}
@@ -313,22 +343,39 @@ const SignatureForm: React.FC = () => {
 
                         <SignatureCanvas
                             ref={sigCanvas}
+                            penColor={penColor}
+                            minWidth={penWidth}
+                            maxWidth={penWidth}
                             canvasProps={{
                                 className: "w-full h-64 cursor-crosshair relative z-10",
                             }}
                             backgroundColor="rgba(255,255,255,0)"
                         />
                     </div>
-                    <motion.button
-                        type="button"
-                        whileHover={{ scale: 1.1, rotate: 10 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={clearCanvas}
-                        className="absolute top-4 right-4 p-3 bg-white text-gray-400 rounded-full hover:bg-red-50 hover:text-red-500 transition-colors shadow-md border border-gray-100 z-20"
-                        title="清除重簽"
-                    >
-                        <Eraser size={20} />
-                    </motion.button>
+
+                    <div className="absolute top-4 right-4 flex gap-2 z-20">
+                        <motion.button
+                            type="button"
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={undoSignature}
+                            className="p-3 bg-white text-gray-500 rounded-full hover:bg-blue-50 hover:text-blue-500 transition-colors shadow-md border border-gray-100"
+                            title="復原上一步"
+                        >
+                            <Undo size={20} />
+                        </motion.button>
+                        <motion.button
+                            type="button"
+                            whileHover={{ scale: 1.1, rotate: 10 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={clearCanvas}
+                            className="p-3 bg-white text-gray-500 rounded-full hover:bg-red-50 hover:text-red-500 transition-colors shadow-md border border-gray-100"
+                            title="清除重簽"
+                        >
+                            <Eraser size={20} />
+                        </motion.button>
+                    </div>
+
                     <div className="absolute bottom-4 right-4 pointer-events-none text-xs font-bold text-orange-200 select-none tracking-widest uppercase z-0">
                         Signature Pad
                     </div>
