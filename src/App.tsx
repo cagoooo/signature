@@ -1,6 +1,6 @@
 import SignatureForm from './components/SignatureForm';
-import Login from './components/Login';
-import Dashboard from './components/Dashboard';
+import AdminLogin from './components/AdminLogin';
+import AdminDashboard from './components/AdminDashboard';
 import ProtectedRoute from './components/ProtectedRoute';
 import { motion } from 'framer-motion';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
@@ -47,9 +47,9 @@ function Home() {
             </span>
             <span className="hidden md:block text-gray-300">|</span>
             <span className="flex items-center gap-1.5 text-sm font-medium text-gray-500">
-              Designed with 
-              <span className="animate-bounce inline-block filter drop-shadow-sm">🌈</span> 
-              & 
+              Designed with
+              <span className="animate-bounce inline-block filter drop-shadow-sm">🌈</span>
+              &
               <span className="animate-pulse inline-block text-red-500 filter drop-shadow-sm">❤️</span>
             </span>
           </div>
@@ -73,12 +73,12 @@ function App() {
     <Router basename="/signature">
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/admin/login" element={<Login />} />
+        <Route path="/admin/login" element={<AdminLogin />} />
         <Route
           path="/admin/dashboard"
           element={
             <ProtectedRoute>
-              <Dashboard />
+              <AdminDashboard />
             </ProtectedRoute>
           }
         />

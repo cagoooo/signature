@@ -23,6 +23,10 @@ if (typeof window !== 'undefined') {
     // Only initialize in browser environment
     // Use a try-catch block to prevent app crash if key is missing or invalid
     try {
+        if (location.hostname === "localhost") {
+            (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+        }
+
         initializeAppCheck(app, {
             provider: new ReCaptchaV3Provider('6LcN3FYsAAAAABfy3MJ9CjA0bn42xJmjkvEdxg3x'),
             isTokenAutoRefreshEnabled: true
