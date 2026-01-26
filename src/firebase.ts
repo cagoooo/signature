@@ -24,7 +24,7 @@ if (typeof window !== 'undefined') {
     // Use a try-catch block to prevent app crash if key is missing or invalid
     try {
         initializeAppCheck(app, {
-            provider: new ReCaptchaV3Provider('YOUR_RECAPTCHA_SITE_KEY'),
+            provider: new ReCaptchaV3Provider('6LcN3FYsAAAAABfy3MJ9CjA0bn42xJmjkvEdxg3x'),
             isTokenAutoRefreshEnabled: true
         });
         console.log("App Check initialized");
