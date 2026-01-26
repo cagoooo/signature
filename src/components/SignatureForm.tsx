@@ -73,7 +73,7 @@ const SignatureForm: React.FC = () => {
 
         // 檢查簽名複雜度 (防止只點一點)
         const data: any = sigCanvas.current?.toData();
-        if (!data || data.length === 0 || (data.length === 1 && data[0].points.length < 5)) {
+        if (!data || data.length === 0 || (data.length === 1 && data[0]?.points?.length < 5)) {
             alert('簽名過於簡單，請簽署全名。');
             return;
         }

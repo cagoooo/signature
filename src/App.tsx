@@ -59,7 +59,7 @@ function Home() {
 
 function App() {
   return (
-    <Router>
+    <Router basename="/signature">
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/admin/login" element={<Login />} />
