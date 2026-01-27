@@ -4,73 +4,63 @@ import { db, storage } from '../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { motion } from 'framer-motion';
-import { CheckCircle, Loader2, Eraser, PenTool, AlertCircle, User, GraduationCap, Users, Hash, FileText, Mail, Undo } from 'lucide-react';
+import { CheckCircle, Loader2, Eraser, PenTool, AlertCircle, User, GraduationCap, Users, Hash, MapPin, School } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { generateConsentPDF } from '../utils/pdfGenerator';
-import { sendConsentEmail } from '../utils/emailService';
-import LoadingOverlay from './LoadingOverlay';
 
 interface FormData {
+    city: string;
+    school: string;
     grade: string;
     cls: string;
     seat: string;
     studentName: string;
     parentName: string;
-    email: string;
+    email?: string;
 }
+
+const TAIWAN_CITIES = [
+    "臺北市", "新北市", "基隆市", "桃園市", "新竹市", "新竹縣", "苗栗縣",
+    "臺中市", "彰化縣", "南投縣", "雲林縣", "嘉義市", "嘉義縣", "臺南市",
+    "高雄市", "屏東縣", "宜蘭縣", "花蓮縣", "臺東縣", "澎湖縣", "金門縣", "連江縣"
+];
 
 const SignatureForm: React.FC = () => {
     const sigCanvas = useRef<SignatureCanvas>(null);
     const [formData, setFormData] = useState<FormData>({
+        city: '',
+        school: '',
         grade: '',
         cls: '',
         seat: '',
         studentName: '',
         parentName: '',
-        email: '',
+        email: ''
     });
     const [loading, setLoading] = useState(false);
-    const [loadingMessage, setLoadingMessage] = useState('處理中...');
     const [submitted, setSubmitted] = useState(false);
-    const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
 
-    // Pen Settings
-    const [penColor, setPenColor] = useState('black');
-    const [penWidth, setPenWidth] = useState(2.5);
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value } = e.target;
-        if (['grade', 'cls', 'seat'].includes(name)) {
-            if (value === '' || /^\d+$/.test(value)) {
-                setFormData({ ...formData, [name]: value });
-            }
-        } else {
-            setFormData({ ...formData, [name]: value });
-        }
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
     const clearCanvas = () => {
         sigCanvas.current?.clear();
     };
 
-    const undoSignature = () => {
-        const data = sigCanvas.current?.toData();
-        if (data) {
-            data.pop(); // Remove the last stroke
-            sigCanvas.current?.fromData(data);
-        }
-    };
-
     const triggerConfetti = () => {
         const duration = 3 * 1000;
         const animationEnd = Date.now() + duration;
         const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+
         const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+
         const interval: any = setInterval(function () {
             const timeLeft = animationEnd - Date.now();
+
             if (timeLeft <= 0) {
                 return clearInterval(interval);
             }
+
             const particleCount = 50 * (timeLeft / duration);
             confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
             confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
@@ -85,84 +75,28 @@ const SignatureForm: React.FC = () => {
             return;
         }
 
-        const data: any = sigCanvas.current?.toData();
-        if (!data || data.length === 0 || (data.length === 1 && data[0]?.points?.length < 5)) {
-            alert('簽名過於簡單，請簽署全名。');
-            return;
-        }
-
         setLoading(true);
-        setLoadingMessage('正在處理簽名圖片...');
 
         try {
-            const originalCanvas = sigCanvas.current?.getCanvas();
-            if (!originalCanvas) return;
+            const canvas = sigCanvas.current?.getTrimmedCanvas();
+            if (!canvas) return;
 
-            const targetWidth = 600;
-            const targetHeight = 300;
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = targetWidth;
-            tempCanvas.height = targetHeight;
-            const ctx = tempCanvas.getContext('2d');
-
-            if (ctx) {
-                ctx.drawImage(originalCanvas, 0, 0, targetWidth, targetHeight);
-            }
-
-            const blob = await new Promise<Blob | null>(resolve => tempCanvas.toBlob(resolve, 'image/png'));
+            const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
             if (!blob) throw new Error("無法產生圖片");
 
-            setLoadingMessage('正在上傳簽名...');
             const timestamp = Date.now();
-            const fileName = `${formData.grade}_${formData.cls}_${formData.seat}_${formData.studentName}_${formData.parentName}_${timestamp}.png`;
+            const fileName = `${formData.city}_${formData.school}_${formData.grade}_${formData.cls}_${formData.seat}_${formData.studentName}_${timestamp}.png`;
             const storageRef = ref(storage, `signatures/${fileName}`);
 
-            await uploadBytes(storageRef, blob, { contentType: 'image/png' });
+            await uploadBytes(storageRef, blob);
             const downloadURL = await getDownloadURL(storageRef);
-            setSignatureUrl(downloadURL);
 
-            setLoadingMessage('正在儲存資料...');
             await addDoc(collection(db, "signatures"), {
                 ...formData,
                 signatureUrl: downloadURL,
                 timestamp: serverTimestamp(),
                 userAgent: navigator.userAgent
             });
-
-            setLoadingMessage('正在生成 PDF 同意書...');
-            let pdfUrl = '';
-            try {
-                const pdfBlob = await generateConsentPDF({
-                    ...formData,
-                    signatureUrl: downloadURL,
-                    timestamp: { toDate: () => new Date() }
-                }, { returnBlob: true });
-
-                if (pdfBlob && pdfBlob instanceof Blob) {
-                    setLoadingMessage('正在上傳 PDF...');
-                    const pdfFileName = `${formData.grade}_${formData.cls}_${formData.seat}_${formData.studentName}_同意書_${timestamp}.pdf`;
-                    const pdfStorageRef = ref(storage, `consents/${pdfFileName}`);
-                    await uploadBytes(pdfStorageRef, pdfBlob, { contentType: 'application/pdf' });
-                    pdfUrl = await getDownloadURL(pdfStorageRef);
-                }
-            } catch (pdfError) {
-                console.error("Error generating/uploading PDF:", pdfError);
-            }
-
-            if (formData.email) {
-                setLoadingMessage('正在寄送通知信...');
-                await sendConsentEmail({
-                    to_email: formData.email,
-                    to_name: formData.parentName,
-                    student_name: formData.studentName,
-                    grade: formData.grade,
-                    cls: formData.cls,
-                    seat: formData.seat,
-                    signature_url: downloadURL,
-                    timestamp: new Date().toLocaleString(),
-                    pdf_link: pdfUrl
-                });
-            }
 
             setSubmitted(true);
             triggerConfetti();
@@ -190,35 +124,15 @@ const SignatureForm: React.FC = () => {
                     <CheckCircle size={80} />
                 </motion.div>
                 <h2 className="text-4xl font-heading font-bold text-gray-800 mb-4">簽署完成！🎉</h2>
-                <p className="text-gray-600 text-xl mb-8 font-medium">
-                    感謝您的配合，資料已成功送出。
-                    {formData.email && <span className="block text-sm text-gray-500 mt-2">(副本已寄送至您的信箱)</span>}
-                </p>
-
-                <div className="flex flex-col gap-4 w-full max-w-xs mx-auto">
-                    <motion.button
-                        whileHover={{ scale: 1.05, boxShadow: "0px 10px 20px rgba(37, 99, 235, 0.4)" }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => generateConsentPDF({
-                            ...formData,
-                            signatureUrl: signatureUrl || '',
-                            timestamp: { toDate: () => new Date() }
-                        } as any)}
-                        className="w-full py-4 px-6 bg-blue-600 text-white rounded-2xl font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-2"
-                    >
-                        <FileText size={24} />
-                        下載同意書 PDF
-                    </motion.button>
-
-                    <motion.button
-                        whileHover={{ scale: 1.05, boxShadow: "0px 10px 20px rgba(16, 185, 129, 0.4)" }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => window.location.reload()}
-                        className="w-full py-4 px-6 bg-gradient-to-r from-vibrant-green to-emerald-500 text-white rounded-2xl font-bold text-lg shadow-lg transition-all"
-                    >
-                        返回首頁
-                    </motion.button>
-                </div>
+                <p className="text-gray-600 text-xl mb-8 font-medium">感謝您的配合，資料已成功送出。</p>
+                <motion.button
+                    whileHover={{ scale: 1.05, boxShadow: "0px 10px 20px rgba(16, 185, 129, 0.4)" }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => window.location.reload()}
+                    className="px-10 py-4 bg-gradient-to-r from-vibrant-green to-emerald-500 text-white rounded-full font-bold text-lg shadow-lg transition-all"
+                >
+                    返回首頁
+                </motion.button>
             </motion.div>
         );
     }
@@ -229,154 +143,117 @@ const SignatureForm: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
             onSubmit={handleSubmit}
-            className="space-y-6 md:space-y-8 bg-white/80 backdrop-blur-xl p-5 md:p-10 rounded-[2rem] shadow-2xl border border-white/60 relative overflow-hidden"
+            className="space-y-8 bg-white/80 backdrop-blur-xl p-8 md:p-10 rounded-[2rem] shadow-2xl border border-white/60 relative overflow-hidden"
         >
-            <LoadingOverlay isLoading={loading} message={loadingMessage} />
-
             {/* Top Gradient Border */}
             <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-vibrant-blue via-vibrant-purple to-vibrant-pink"></div>
 
             {/* Consent Box */}
-            <div className="bg-gradient-to-r from-vibrant-yellow/10 to-orange-50 border-l-8 border-vibrant-yellow p-5 md:p-8 rounded-r-2xl shadow-sm">
-                <div className="flex flex-col md:flex-row items-start gap-4 md:gap-5">
-                    {/* Mobile Header: Icon + Title */}
-                    <div className="flex items-center gap-3 md:hidden w-full border-b border-orange-100 pb-3 mb-2">
-                        <div className="bg-vibrant-yellow/20 p-2 rounded-full shrink-0">
-                            <AlertCircle className="text-vibrant-orange" size={24} />
-                        </div>
-                        <strong className="text-vibrant-orange text-xl font-heading">同意書內容</strong>
+            <div className="bg-gradient-to-r from-vibrant-yellow/10 to-orange-50 border-l-8 border-vibrant-yellow p-6 rounded-r-2xl shadow-sm">
+                <div className="flex items-start gap-4">
+                    <div className="bg-vibrant-yellow/20 p-2 rounded-full shrink-0">
+                        <AlertCircle className="text-vibrant-orange" size={24} />
                     </div>
-
-                    {/* Desktop Icon */}
-                    <div className="hidden md:block bg-vibrant-yellow/20 p-3 rounded-full shrink-0 mt-1">
-                        <AlertCircle className="text-vibrant-orange" size={32} />
-                    </div>
-
-                    {/* Text Content */}
-                    <div className="text-base md:text-xl text-gray-800 leading-loose font-medium tracking-wide text-justify md:text-left">
-                        <strong className="hidden md:block mb-3 text-vibrant-orange text-2xl md:text-3xl font-heading">同意書內容</strong>
-                        本人同意 貴校於教育活動範圍內，拍攝、錄影及使用本人子女之肖像（包含照片及動態影像），並授權 貴校用於教育推廣、成果發表、校園網頁等非營利目的。
+                    <div className="text-sm text-gray-700 leading-relaxed font-medium">
+                        <strong className="block mb-2 text-vibrant-orange text-lg font-heading">同意書內容</strong>
+                        本人同意 貴校於教育活動範圍內，拍攝、錄影及使用本人子女之肖像（包含照片及動態影像），並授權 貴校用於教育推廣、成果發表及校園網頁等非營利目的。
                     </div>
                 </div>
+            </div>
+
+            {/* School Info Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="group">
+                    <label className="flex items-center gap-2 text-sm font-bold text-gray-600 mb-2 group-focus-within:text-gray-800 transition-colors">
+                        縣市
+                    </label>
+                    <div className="relative">
+                        <div className="absolute left-3 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-vibrant-teal bg-teal-50 transition-colors">
+                            <MapPin size={18} />
+                        </div>
+                        <select
+                            name="city"
+                            required
+                            value={formData.city}
+                            onChange={handleChange}
+                            className="w-full pl-12 pr-4 py-3.5 bg-gray-50/50 border-2 border-gray-100 rounded-2xl focus:ring-4 focus:ring-opacity-20 outline-none transition-all text-gray-700 font-bold focus:ring-vibrant-teal focus:border-vibrant-teal appearance-none cursor-pointer"
+                        >
+                            <option value="" disabled>請選擇縣市</option>
+                            {TAIWAN_CITIES.map(city => (
+                                <option key={city} value={city}>{city}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+
+                <InputField
+                    label="學校名稱" name="school" type="text" placeholder="例如：石門國小"
+                    icon={<School size={18} />} color="teal"
+                    onChange={handleChange}
+                />
             </div>
 
             {/* Student Info Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <InputField
-                    label="年級" name="grade" type="text" inputMode="numeric" pattern="[0-9]*" placeholder="1"
+                    label="年級" name="grade" type="number" placeholder="1"
                     icon={<GraduationCap size={18} />} color="blue"
-                    value={formData.grade}
                     onChange={handleChange}
                 />
                 <InputField
-                    label="班級" name="cls" type="text" inputMode="numeric" pattern="[0-9]*" placeholder="101"
+                    label="班級" name="cls" type="text" placeholder="2"
                     icon={<Users size={18} />} color="blue"
-                    value={formData.cls}
                     onChange={handleChange}
                 />
                 <InputField
-                    label="座號" name="seat" type="text" inputMode="numeric" pattern="[0-9]*" placeholder="5"
+                    label="座號" name="seat" type="number" placeholder="5"
                     icon={<Hash size={18} />} color="blue"
-                    value={formData.seat}
                     onChange={handleChange}
                 />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <InputField
-                    label="學生姓名" name="studentName" type="text" placeholder="王小明"
+                    label="學生姓名" name="studentName" type="text" placeholder="學生姓名"
                     icon={<User size={18} />} color="pink"
-                    value={formData.studentName}
                     onChange={handleChange}
                 />
                 <InputField
-                    label="家長姓名" name="parentName" type="text" placeholder="王大明"
+                    label="家長姓名" name="parentName" type="text" placeholder="家長姓名"
                     icon={<User size={18} />} color="pink"
-                    value={formData.parentName}
                     onChange={handleChange}
                 />
             </div>
 
-            {/* Email Field */}
-            <InputField
-                label="家長 Email (選填，寄送副本用)" name="email" type="email" placeholder="example@email.com"
-                icon={<Mail size={18} />} color="orange"
-                value={formData.email}
-                onChange={handleChange}
-            />
-
             {/* Signature Area */}
             <div className="space-y-4">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <label className="flex items-center gap-3 text-gray-700 font-bold text-xl">
-                        <div className="bg-vibrant-orange/10 p-2 rounded-lg text-vibrant-orange">
-                            <PenTool size={24} />
-                        </div>
-                        請在此簽名
-                    </label>
-
-                    {/* Pen Tools */}
-                    <div className="flex items-center gap-2 bg-gray-100 p-2 rounded-xl self-start md:self-auto">
-                        <div className="flex gap-1 border-r border-gray-300 pr-2 mr-2">
-                            <button type="button" onClick={() => setPenColor('black')} className={`w-8 h-8 rounded-full bg-black border-2 ${penColor === 'black' ? 'border-blue-500 scale-110' : 'border-transparent'}`} title="黑色"></button>
-                            <button type="button" onClick={() => setPenColor('blue')} className={`w-8 h-8 rounded-full bg-blue-600 border-2 ${penColor === 'blue' ? 'border-blue-500 scale-110' : 'border-transparent'}`} title="藍色"></button>
-                            <button type="button" onClick={() => setPenColor('red')} className={`w-8 h-8 rounded-full bg-red-600 border-2 ${penColor === 'red' ? 'border-blue-500 scale-110' : 'border-transparent'}`} title="紅色"></button>
-                        </div>
-                        <div className="flex gap-1 items-center">
-                            <button type="button" onClick={() => setPenWidth(1)} className={`p-2 rounded-lg ${penWidth === 1 ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`} title="細">
-                                <div className="w-4 h-0.5 bg-gray-600"></div>
-                            </button>
-                            <button type="button" onClick={() => setPenWidth(2.5)} className={`p-2 rounded-lg ${penWidth === 2.5 ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`} title="中">
-                                <div className="w-4 h-1 bg-gray-600"></div>
-                            </button>
-                            <button type="button" onClick={() => setPenWidth(5)} className={`p-2 rounded-lg ${penWidth === 5 ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`} title="粗">
-                                <div className="w-4 h-2 bg-gray-600"></div>
-                            </button>
-                        </div>
+                <label className="flex items-center gap-3 text-gray-700 font-bold text-xl">
+                    <div className="bg-vibrant-orange/10 p-2 rounded-lg text-vibrant-orange">
+                        <PenTool size={24} />
                     </div>
-                </div>
-
+                    請在此簽名
+                </label>
                 <div className="relative group">
-                    <div className="border-4 border-dashed border-orange-200 rounded-3xl overflow-hidden bg-orange-50/30 group-hover:border-vibrant-orange group-hover:bg-orange-50/50 transition-all duration-300 touch-none shadow-inner relative">
-                        {/* Background Pattern */}
-                        <div className="absolute inset-0 bg-[radial-gradient(#fb923c_1px,transparent_1px)] [background-size:20px_20px] opacity-20 pointer-events-none"></div>
-
+                    <div className="border-4 border-dashed border-gray-200 rounded-3xl overflow-hidden bg-white group-hover:border-vibrant-orange/50 transition-all duration-300 touch-none shadow-inner">
                         <SignatureCanvas
                             ref={sigCanvas}
-                            penColor={penColor}
-                            minWidth={penWidth}
-                            maxWidth={penWidth}
                             canvasProps={{
-                                className: "w-full h-64 cursor-crosshair relative z-10",
+                                className: "w-full h-64 cursor-crosshair",
                             }}
                             backgroundColor="rgba(255,255,255,0)"
                         />
                     </div>
-
-                    <div className="absolute top-4 right-4 flex gap-2 z-20">
-                        <motion.button
-                            type="button"
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                            onClick={undoSignature}
-                            className="p-3 bg-white text-gray-500 rounded-full hover:bg-blue-50 hover:text-blue-500 transition-colors shadow-md border border-gray-100"
-                            title="復原上一步"
-                        >
-                            <Undo size={20} />
-                        </motion.button>
-                        <motion.button
-                            type="button"
-                            whileHover={{ scale: 1.1, rotate: 10 }}
-                            whileTap={{ scale: 0.9 }}
-                            onClick={clearCanvas}
-                            className="p-3 bg-white text-gray-500 rounded-full hover:bg-red-50 hover:text-red-500 transition-colors shadow-md border border-gray-100"
-                            title="清除重簽"
-                        >
-                            <Eraser size={20} />
-                        </motion.button>
-                    </div>
-
-                    <div className="absolute bottom-4 right-4 pointer-events-none text-xs font-bold text-orange-200 select-none tracking-widest uppercase z-0">
+                    <motion.button
+                        type="button"
+                        whileHover={{ scale: 1.1, rotate: 10 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={clearCanvas}
+                        className="absolute top-4 right-4 p-3 bg-gray-100 text-gray-500 rounded-full hover:bg-red-50 hover:text-red-500 transition-colors shadow-md border border-gray-200"
+                        title="清除重簽"
+                    >
+                        <Eraser size={20} />
+                    </motion.button>
+                    <div className="absolute bottom-4 right-4 pointer-events-none text-xs font-bold text-gray-200 select-none tracking-widest uppercase">
                         Signature Pad
                     </div>
                 </div>
@@ -407,43 +284,36 @@ const SignatureForm: React.FC = () => {
 };
 
 // Reusable Input Component with Colorful Styles
-const InputField = ({ label, name, type, placeholder, icon, color, onChange, value, inputMode, pattern }: any) => {
+const InputField = ({ label, name, type, placeholder, icon, color, onChange }: any) => {
     const colorClasses: any = {
-        blue: "focus:ring-vibrant-blue focus:border-vibrant-blue text-vibrant-blue bg-blue-50/50 border-blue-100 placeholder-blue-200",
-        pink: "focus:ring-vibrant-pink focus:border-vibrant-pink text-vibrant-pink bg-pink-50/50 border-pink-100 placeholder-pink-200",
-        orange: "focus:ring-vibrant-orange focus:border-vibrant-orange text-vibrant-orange bg-orange-50/50 border-orange-100 placeholder-orange-200",
+        blue: "focus:ring-vibrant-blue focus:border-vibrant-blue text-vibrant-blue",
+        pink: "focus:ring-vibrant-pink focus:border-vibrant-pink text-vibrant-pink",
+        orange: "focus:ring-vibrant-orange focus:border-vibrant-orange text-vibrant-orange",
+        teal: "focus:ring-vibrant-teal focus:border-vibrant-teal text-vibrant-teal",
     };
 
     const iconColorClasses: any = {
-        blue: "text-vibrant-blue bg-white shadow-sm",
-        pink: "text-vibrant-pink bg-white shadow-sm",
-        orange: "text-vibrant-orange bg-white shadow-sm",
-    };
-
-    const labelColorClasses: any = {
-        blue: "text-blue-600",
-        pink: "text-pink-600",
-        orange: "text-orange-600",
+        blue: "text-vibrant-blue bg-blue-50",
+        pink: "text-vibrant-pink bg-pink-50",
+        orange: "text-vibrant-orange bg-orange-50",
+        teal: "text-vibrant-teal bg-teal-50",
     };
 
     return (
         <div className="group">
-            <label className={`flex items-center gap-2 text-base font-bold mb-2 transition-colors ${labelColorClasses[color]}`}>
+            <label className="flex items-center gap-2 text-sm font-bold text-gray-600 mb-2 group-focus-within:text-gray-800 transition-colors">
                 {label}
             </label>
             <div className="relative">
-                <div className={`absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-xl ${iconColorClasses[color]} transition-all group-focus-within:scale-110`}>
+                <div className={`absolute left-3 top-1/2 -translate-y-1/2 p-1.5 rounded-md ${iconColorClasses[color]} transition-colors`}>
                     {icon}
                 </div>
                 <input
                     type={type}
                     name={name}
-                    value={value}
-                    inputMode={inputMode}
-                    pattern={pattern}
-                    required={name !== 'email'} // Email is optional
+                    required
                     placeholder={placeholder}
-                    className={`w-full pl-14 pr-4 py-4 border-2 rounded-2xl focus:ring-4 focus:ring-opacity-20 outline-none transition-all font-bold text-lg ${colorClasses[color]}`}
+                    className={`w-full pl-12 pr-4 py-3.5 bg-gray-50/50 border-2 border-gray-100 rounded-2xl focus:ring-4 focus:ring-opacity-20 outline-none transition-all placeholder-gray-300 text-gray-700 font-bold ${colorClasses[color]}`}
                     onChange={onChange}
                 />
             </div>

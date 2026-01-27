@@ -4,11 +4,13 @@ import { collection, getDocs, query, orderBy, Timestamp, deleteDoc, doc, writeBa
 import { signOut } from 'firebase/auth';
 import { useNavigate, Link } from 'react-router-dom';
 import * as XLSX from 'xlsx';
-import { Download, LogOut, Search, Filter, Loader2, FileText, Trash2, CheckSquare, Square, Home, User, Users, Calendar, PenTool } from 'lucide-react';
+import { Download, LogOut, Search, Filter, Loader2, FileText, Trash2, CheckSquare, Square, Home, User, Users, Calendar, PenTool, MapPin, School } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface SignatureData {
     id: string;
+    city?: string;
+    school?: string;
     studentName: string;
     parentName: string;
     grade: string;
@@ -19,10 +21,18 @@ interface SignatureData {
     email?: string;
 }
 
+const TAIWAN_CITIES = [
+    "臺北市", "新北市", "基隆市", "桃園市", "新竹市", "新竹縣", "苗栗縣",
+    "臺中市", "彰化縣", "南投縣", "雲林縣", "嘉義市", "嘉義縣", "臺南市",
+    "高雄市", "屏東縣", "宜蘭縣", "花蓮縣", "臺東縣", "澎湖縣", "金門縣", "連江縣"
+];
+
 const AdminDashboard: React.FC = () => {
     const [signatures, setSignatures] = useState<SignatureData[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [cityFilter, setCityFilter] = useState('');
+    const [schoolFilter, setSchoolFilter] = useState('');
     const [gradeFilter, setGradeFilter] = useState('');
     const [classFilter, setClassFilter] = useState('');
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -112,6 +122,8 @@ const AdminDashboard: React.FC = () => {
 
     const exportToExcel = () => {
         const dataToExport = filteredSignatures.map(item => ({
+            "縣市": item.city || '',
+            "學校": item.school || '',
             "年級": item.grade,
             "班級": item.cls,
             "座號": item.seat,
@@ -131,10 +143,13 @@ const AdminDashboard: React.FC = () => {
     const filteredSignatures = signatures.filter(item => {
         const matchesSearch = item.studentName.includes(searchTerm) ||
             item.parentName.includes(searchTerm) ||
-            item.seat.includes(searchTerm);
+            item.seat.includes(searchTerm) ||
+            (item.school && item.school.includes(searchTerm));
+        const matchesCity = cityFilter ? item.city === cityFilter : true;
+        const matchesSchool = schoolFilter ? (item.school && item.school.includes(schoolFilter)) : true;
         const matchesGrade = gradeFilter ? item.grade === gradeFilter : true;
         const matchesClass = classFilter ? item.cls === classFilter : true;
-        return matchesSearch && matchesGrade && matchesClass;
+        return matchesSearch && matchesCity && matchesSchool && matchesGrade && matchesClass;
     });
 
     const grades = Array.from(new Set(signatures.map(s => s.grade))).sort();
@@ -205,17 +220,43 @@ const AdminDashboard: React.FC = () => {
                 </header>
 
                 {/* Filters */}
-                <div className="bg-white/80 backdrop-blur-xl p-6 rounded-3xl shadow-sm border border-white/60 mb-8 grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="relative md:col-span-2 group">
+                <div className="bg-white/80 backdrop-blur-xl p-6 rounded-3xl shadow-sm border border-white/60 mb-8 grid grid-cols-1 md:grid-cols-5 gap-4">
+                    <div className="relative md:col-span-1 group">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" size={20} />
                         <input
                             type="text"
-                            placeholder="搜尋姓名、座號..."
+                            placeholder="搜尋..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-gray-100 focus:border-blue-500 focus:bg-white bg-gray-50/50 outline-none transition-all"
                         />
                     </div>
+
+                    {/* City Filter */}
+                    <div className="relative group">
+                        <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" size={20} />
+                        <select
+                            value={cityFilter}
+                            onChange={(e) => setCityFilter(e.target.value)}
+                            className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-gray-100 focus:border-blue-500 focus:bg-white bg-gray-50/50 outline-none transition-all appearance-none cursor-pointer"
+                        >
+                            <option value="">所有縣市</option>
+                            {TAIWAN_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                    </div>
+
+                    {/* School Filter */}
+                    <div className="relative group">
+                        <School className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" size={20} />
+                        <input
+                            type="text"
+                            placeholder="學校名稱..."
+                            value={schoolFilter}
+                            onChange={(e) => setSchoolFilter(e.target.value)}
+                            className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-gray-100 focus:border-blue-500 focus:bg-white bg-gray-50/50 outline-none transition-all"
+                        />
+                    </div>
+
                     <div className="relative group">
                         <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" size={20} />
                         <select
@@ -259,6 +300,7 @@ const AdminDashboard: React.FC = () => {
                                                     {selectedIds.size === filteredSignatures.length && filteredSignatures.length > 0 ? <CheckSquare size={20} className="text-white" /> : <Square size={20} />}
                                                 </button>
                                             </th>
+                                            <th className="p-5 font-bold tracking-wide">縣市/學校</th>
                                             <th className="p-5 font-bold tracking-wide">年級</th>
                                             <th className="p-5 font-bold tracking-wide">班級</th>
                                             <th className="p-5 font-bold tracking-wide">座號</th>
@@ -283,6 +325,12 @@ const AdminDashboard: React.FC = () => {
                                                         <button onClick={() => toggleSelection(item.id)} className="text-gray-300 hover:text-blue-600 transition-colors">
                                                             {selectedIds.has(item.id) ? <CheckSquare size={20} className="text-blue-600" /> : <Square size={20} />}
                                                         </button>
+                                                    </td>
+                                                    <td className="p-5">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-xs text-gray-500 font-bold">{item.city}</span>
+                                                            <span className="text-sm font-bold text-gray-700">{item.school}</span>
+                                                        </div>
                                                     </td>
                                                     <td className="p-5">
                                                         <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-bold shadow-sm border border-blue-200">
@@ -334,7 +382,7 @@ const AdminDashboard: React.FC = () => {
                                             ))
                                         ) : (
                                             <tr>
-                                                <td colSpan={9} className="p-16 text-center text-gray-400 flex flex-col items-center justify-center w-full">
+                                                <td colSpan={10} className="p-16 text-center text-gray-400 flex flex-col items-center justify-center w-full">
                                                     <Search size={48} className="mb-4 opacity-20" />
                                                     <p>沒有符合條件的資料</p>
                                                 </td>
@@ -374,7 +422,10 @@ const AdminDashboard: React.FC = () => {
                                                         <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                                                             {item.studentName}
                                                         </h3>
-                                                        <div className="flex gap-2 mt-1.5">
+                                                        <div className="flex gap-2 mt-1.5 flex-wrap">
+                                                            <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-md text-xs font-bold border border-teal-100 flex items-center gap-1">
+                                                                <School size={10} /> {item.city} {item.school}
+                                                            </span>
                                                             <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md text-xs font-bold border border-blue-100 flex items-center gap-1">
                                                                 <User size={10} /> {item.grade}年
                                                             </span>
