@@ -4,7 +4,7 @@ import { db, storage } from '../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { motion } from 'framer-motion';
-import { CheckCircle, Loader2, Eraser, PenTool, AlertCircle, User, GraduationCap, Users, Hash, MapPin, School } from 'lucide-react';
+import { CheckCircle, Loader2, Eraser, PenTool, AlertCircle, User, GraduationCap, Users, Hash, MapPin, School, Circle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface FormData {
@@ -38,6 +38,10 @@ const SignatureForm: React.FC = () => {
     });
     const [loading, setLoading] = useState(false);
     const [submitted, setSubmitted] = useState(false);
+
+    // Pen State
+    const [penColor, setPenColor] = useState('black');
+    const [penWidth, setPenWidth] = useState(2); // Default thickness
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -227,16 +231,45 @@ const SignatureForm: React.FC = () => {
 
             {/* Signature Area */}
             <div className="space-y-4">
-                <label className="flex items-center gap-3 text-gray-700 font-bold text-xl">
-                    <div className="bg-vibrant-orange/10 p-2 rounded-lg text-vibrant-orange">
-                        <PenTool size={24} />
+                <div className="flex justify-between items-end">
+                    <label className="flex items-center gap-3 text-gray-700 font-bold text-xl">
+                        <div className="bg-vibrant-orange/10 p-2 rounded-lg text-vibrant-orange">
+                            <PenTool size={24} />
+                        </div>
+                        請在此簽名
+                    </label>
+
+                    {/* Pen Controls */}
+                    <div className="flex items-center gap-3 bg-gray-50 p-1.5 rounded-xl border border-gray-200">
+                        {/* Colors */}
+                        <div className="flex gap-1 pr-3 border-r border-gray-200">
+                            <button type="button" onClick={() => setPenColor('black')} className={`w-6 h-6 rounded-full bg-black transition-transform ${penColor === 'black' ? 'scale-125 ring-2 ring-offset-1 ring-gray-400' : 'hover:scale-110'}`} title="黑色" />
+                            <button type="button" onClick={() => setPenColor('#2563eb')} className={`w-6 h-6 rounded-full bg-blue-600 transition-transform ${penColor === '#2563eb' ? 'scale-125 ring-2 ring-offset-1 ring-blue-400' : 'hover:scale-110'}`} title="藍色" />
+                            <button type="button" onClick={() => setPenColor('#dc2626')} className={`w-6 h-6 rounded-full bg-red-600 transition-transform ${penColor === '#dc2626' ? 'scale-125 ring-2 ring-offset-1 ring-red-400' : 'hover:scale-110'}`} title="紅色" />
+                        </div>
+
+                        {/* Thickness */}
+                        <div className="flex gap-1 items-center">
+                            <button type="button" onClick={() => setPenWidth(1)} className={`p-1 rounded-lg transition-all ${penWidth === 1 ? 'bg-white shadow-sm text-gray-800' : 'text-gray-400 hover:text-gray-600'}`} title="細">
+                                <Circle size={8} fill="currentColor" />
+                            </button>
+                            <button type="button" onClick={() => setPenWidth(2.5)} className={`p-1 rounded-lg transition-all ${penWidth === 2.5 ? 'bg-white shadow-sm text-gray-800' : 'text-gray-400 hover:text-gray-600'}`} title="中">
+                                <Circle size={12} fill="currentColor" />
+                            </button>
+                            <button type="button" onClick={() => setPenWidth(5)} className={`p-1 rounded-lg transition-all ${penWidth === 5 ? 'bg-white shadow-sm text-gray-800' : 'text-gray-400 hover:text-gray-600'}`} title="粗">
+                                <Circle size={16} fill="currentColor" />
+                            </button>
+                        </div>
                     </div>
-                    請在此簽名
-                </label>
+                </div>
+
                 <div className="relative group">
                     <div className="border-4 border-dashed border-gray-200 rounded-3xl overflow-hidden bg-white group-hover:border-vibrant-orange/50 transition-all duration-300 touch-none shadow-inner">
                         <SignatureCanvas
                             ref={sigCanvas}
+                            penColor={penColor}
+                            minWidth={penWidth * 0.5}
+                            maxWidth={penWidth * 1.5}
                             canvasProps={{
                                 className: "w-full h-64 cursor-crosshair",
                             }}
