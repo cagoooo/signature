@@ -82,7 +82,9 @@ const SignatureForm: React.FC = () => {
         setLoading(true);
 
         try {
-            const canvas = sigCanvas.current?.getTrimmedCanvas();
+            // Fix: getTrimmedCanvas() causes a runtime error in some Vite environments due to dependency issues.
+            // We use getCanvas() instead to get the full canvas content.
+            const canvas = sigCanvas.current?.getCanvas();
             if (!canvas) return;
 
             const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));

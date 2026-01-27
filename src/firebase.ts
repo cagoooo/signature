@@ -24,11 +24,12 @@ if (typeof window !== 'undefined') {
     // Use a try-catch block to prevent app crash if key is missing or invalid
     try {
         if (location.hostname === "localhost") {
-            (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+            // Use a fixed debug token for localhost to avoid 403 errors after cache clear
+            (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = "be22317e-4cb0-40f6-a808-82c25afd555e";
         }
 
         initializeAppCheck(app, {
-            provider: new ReCaptchaV3Provider('6LcN3FYsAAAAABfy3MJ9CjA0bn42xJmjkvEdxg3x'),
+            provider: new ReCaptchaV3Provider('6LcN3FYsAAAAAKG3lhwRvT4FaHeb7bzaFAEZpqw4'),
             isTokenAutoRefreshEnabled: true
         });
         console.log("App Check initialized");
