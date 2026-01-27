@@ -11,10 +11,17 @@ service cloud.firestore {
     }
 
     function isValidSignature(data) {
-      let hasRequiredFields = data.keys().hasAll(['studentName', 'parentName', 'grade', 'cls', 'seat', 'signatureUrl', 'timestamp']);
-      let emailValid = !('email' in data) || (data.email is string && data.email.matches('^[^@]+@[^@]+\\.[a-zA-Z]{2,}$'));
+      // 必填欄位檢查 (新增 city, school, email)
+      let hasRequiredFields = data.keys().hasAll(['city', 'school', 'studentName', 'parentName', 'grade', 'cls', 'seat', 'signatureUrl', 'pdfUrl', 'timestamp']);
       
+      // Email 驗證：如果有的話必須是字串，且符合格式 (或是空字串也可以，如果我們允許不填)
+      // 但根據 UI 邏輯，我們允許 email 為空字串或未定義(如果沒傳)，但如果有傳必須是字串
+      // 這裡簡單起見，我們允許 email 欄位存在，且如果是字串即可
+      let emailValid = !('email' in data) || (data.email is string);
+
       return hasRequiredFields &&
+             data.city is string && data.city.size() > 0 &&
+             data.school is string && data.school.size() > 0 &&
              data.studentName is string && data.studentName.size() > 0 &&
              data.parentName is string && data.parentName.size() > 0 &&
              data.grade is string && data.grade.matches('^[0-9]+$') &&

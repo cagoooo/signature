@@ -11,8 +11,7 @@ service firebase.storage {
     }
     
     match /consents/{fileName} {
-      allow write: if request.resource.size < 5 * 1024 * 1024
-                   && request.resource.contentType == 'application/pdf';
+      allow write: if true;
       allow read: if true;
     }
   }

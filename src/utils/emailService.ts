@@ -9,6 +9,8 @@ const PUBLIC_KEY = 'MIaTcBPK7lAoUj5Aj';
 interface EmailData {
     to_email: string;
     to_name: string;
+    city: string;
+    school: string;
     student_name: string;
     grade: string;
     cls: string;
@@ -28,6 +30,8 @@ export const sendConsentEmail = async (data: EmailData) => {
             {
                 to_email: data.to_email,
                 to_name: data.to_name,
+                city: data.city,
+                school: data.school,
                 student_name: data.student_name,
                 grade: data.grade,
                 cls: data.cls,
