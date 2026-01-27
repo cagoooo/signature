@@ -19,6 +19,7 @@ interface FormData {
     studentName: string;
     parentName: string;
     email: string;
+    isAgreed: string; // 'yes' or 'no'
 }
 
 const TAIWAN_CITIES = [
@@ -38,7 +39,8 @@ const SignatureForm: React.FC = () => {
         seat: '',
         studentName: '',
         parentName: '',
-        email: ''
+        email: '',
+        isAgreed: '' // Default empty to force selection
     });
     const [loading, setLoading] = useState(false);
     const [submitted, setSubmitted] = useState(false);
@@ -79,6 +81,11 @@ const SignatureForm: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (!formData.isAgreed) {
+            alert('請選擇是否同意授權！');
+            return;
+        }
 
         if (sigCanvas.current?.isEmpty()) {
             alert('請先簽名！');
@@ -138,6 +145,7 @@ const SignatureForm: React.FC = () => {
                     ...formData,
                     signatureUrl: sigDownloadURL,
                     pdfUrl: pdfDownloadURL,
+                    isAgreed: formData.isAgreed === 'yes', // Store as boolean for easier filtering
                     timestamp: serverTimestamp(),
                     userAgent: navigator.userAgent
                 });
@@ -155,9 +163,10 @@ const SignatureForm: React.FC = () => {
                     grade: formData.grade,
                     cls: formData.cls,
                     seat: formData.seat,
-                    signature_url: pdfDownloadURL, // Use PDF URL here as requested
+                    signature_url: pdfDownloadURL,
                     timestamp: new Date().toLocaleString('zh-TW'),
-                    pdf_link: pdfDownloadURL
+                    pdf_link: pdfDownloadURL,
+                    is_agreed_text: formData.isAgreed === 'yes' ? '【同意】' : '【不同意】'
                 });
             }
 
@@ -230,15 +239,48 @@ const SignatureForm: React.FC = () => {
                 <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-vibrant-blue via-vibrant-purple to-vibrant-pink"></div>
 
                 {/* Consent Box */}
-                <div className="bg-gradient-to-r from-vibrant-yellow/10 to-orange-50 border-l-8 border-vibrant-yellow p-6 rounded-r-2xl shadow-sm">
-                    <div className="flex items-start gap-4">
-                        <div className="bg-vibrant-yellow/20 p-2 rounded-full shrink-0">
-                            <AlertCircle className="text-vibrant-orange" size={24} />
+                <div className="bg-gradient-to-r from-vibrant-yellow/10 to-orange-50 border-l-8 border-vibrant-yellow p-6 md:p-8 rounded-r-2xl shadow-md">
+                    <div className="flex items-start gap-4 md:gap-6">
+                        <div className="bg-vibrant-yellow/20 p-3 rounded-full shrink-0">
+                            <AlertCircle className="text-vibrant-orange" size={32} />
                         </div>
-                        <div className="text-sm text-gray-700 leading-relaxed font-medium">
-                            <strong className="block mb-2 text-vibrant-orange text-lg font-heading">同意書內容</strong>
+                        <div className="text-base md:text-lg text-gray-700 leading-relaxed font-medium">
+                            <strong className="block mb-2 text-vibrant-orange text-xl md:text-2xl font-heading">同意書內容</strong>
                             本人同意 貴校於教育活動範圍內，拍攝、錄影及使用本人子女之肖像（包含照片及動態影像），並授權 貴校用於教育推廣、成果發表及校園網頁等非營利目的。
                         </div>
+                    </div>
+
+                    {/* Agreement Options */}
+                    <div className="mt-8 flex flex-col sm:flex-row gap-4">
+                        <label className={`flex-1 flex items-center justify-center gap-3 p-4 rounded-2xl border-2 cursor-pointer transition-all ${formData.isAgreed === 'yes' ? 'bg-green-50 border-vibrant-green text-vibrant-green shadow-md' : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200'}`}>
+                            <input
+                                type="radio"
+                                name="isAgreed"
+                                value="yes"
+                                checked={formData.isAgreed === 'yes'}
+                                onChange={handleChange}
+                                className="hidden"
+                            />
+                            <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${formData.isAgreed === 'yes' ? 'border-vibrant-green bg-vibrant-green' : 'border-gray-300'}`}>
+                                {formData.isAgreed === 'yes' && <div className="w-2.5 h-2.5 rounded-full bg-white" />}
+                            </div>
+                            <span className="font-bold text-lg">我同意授權</span>
+                        </label>
+
+                        <label className={`flex-1 flex items-center justify-center gap-3 p-4 rounded-2xl border-2 cursor-pointer transition-all ${formData.isAgreed === 'no' ? 'bg-red-50 border-vibrant-pink text-vibrant-pink shadow-md' : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200'}`}>
+                            <input
+                                type="radio"
+                                name="isAgreed"
+                                value="no"
+                                checked={formData.isAgreed === 'no'}
+                                onChange={handleChange}
+                                className="hidden"
+                            />
+                            <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${formData.isAgreed === 'no' ? 'border-vibrant-pink bg-vibrant-pink' : 'border-gray-300'}`}>
+                                {formData.isAgreed === 'no' && <div className="w-2.5 h-2.5 rounded-full bg-white" />}
+                            </div>
+                            <span className="font-bold text-lg">我不同意授權</span>
+                        </label>
                     </div>
                 </div>
 
@@ -306,74 +348,88 @@ const SignatureForm: React.FC = () => {
                     />
                 </div>
 
-                {/* Email Field */}
-                <div className="grid grid-cols-1">
-                    <InputField
-                        label="電子郵件 (必填，用於接收備份)" name="email" type="email" placeholder="example@email.com"
-                        icon={<Mail size={18} />} color="orange"
-                        onChange={handleChange}
-                    />
-                </div>
+                {/* Email & Signature Section */}
+                <div className="bg-white/60 backdrop-blur-md p-6 md:p-8 rounded-3xl border-2 border-vibrant-blue/10 shadow-xl space-y-8 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-vibrant-purple/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
+                    <div className="absolute bottom-0 left-0 w-32 h-32 bg-vibrant-orange/10 rounded-full blur-3xl -ml-16 -mb-16 pointer-events-none"></div>
 
-                {/* Signature Area */}
-                <div className="space-y-4">
-                    <div className="flex justify-between items-end">
-                        <label className="flex items-center gap-3 text-gray-700 font-bold text-xl">
-                            <div className="bg-vibrant-orange/10 p-2 rounded-lg text-vibrant-orange">
-                                <PenTool size={24} />
-                            </div>
-                            請在此簽名
-                        </label>
-
-                        {/* Pen Controls */}
-                        <div className="flex items-center gap-3 bg-gray-50 p-1.5 rounded-xl border border-gray-200">
-                            {/* Colors */}
-                            <div className="flex gap-1 pr-3 border-r border-gray-200">
-                                <button type="button" onClick={() => setPenColor('black')} className={`w-6 h-6 rounded-full bg-black transition-transform ${penColor === 'black' ? 'scale-125 ring-2 ring-offset-1 ring-gray-400' : 'hover:scale-110'}`} title="黑色" />
-                                <button type="button" onClick={() => setPenColor('#2563eb')} className={`w-6 h-6 rounded-full bg-blue-600 transition-transform ${penColor === '#2563eb' ? 'scale-125 ring-2 ring-offset-1 ring-blue-400' : 'hover:scale-110'}`} title="藍色" />
-                                <button type="button" onClick={() => setPenColor('#dc2626')} className={`w-6 h-6 rounded-full bg-red-600 transition-transform ${penColor === '#dc2626' ? 'scale-125 ring-2 ring-offset-1 ring-red-400' : 'hover:scale-110'}`} title="紅色" />
-                            </div>
-
-                            {/* Thickness */}
-                            <div className="flex gap-1 items-center">
-                                <button type="button" onClick={() => setPenWidth(1)} className={`p-1 rounded-lg transition-all ${penWidth === 1 ? 'bg-white shadow-sm text-gray-800' : 'text-gray-400 hover:text-gray-600'}`} title="細">
-                                    <Circle size={8} fill="currentColor" />
-                                </button>
-                                <button type="button" onClick={() => setPenWidth(2.5)} className={`p-1 rounded-lg transition-all ${penWidth === 2.5 ? 'bg-white shadow-sm text-gray-800' : 'text-gray-400 hover:text-gray-600'}`} title="中">
-                                    <Circle size={12} fill="currentColor" />
-                                </button>
-                                <button type="button" onClick={() => setPenWidth(5)} className={`p-1 rounded-lg transition-all ${penWidth === 5 ? 'bg-white shadow-sm text-gray-800' : 'text-gray-400 hover:text-gray-600'}`} title="粗">
-                                    <Circle size={16} fill="currentColor" />
-                                </button>
-                            </div>
-                        </div>
+                    {/* Email Field */}
+                    <div className="grid grid-cols-1 relative">
+                        <InputField
+                            label="電子郵件 (必填，用於接收備份)" name="email" type="email" placeholder="example@email.com"
+                            icon={<Mail size={18} />} color="orange"
+                            onChange={handleChange}
+                        />
                     </div>
 
-                    <div className="relative group">
-                        <div className="border-4 border-dashed border-gray-200 rounded-3xl overflow-hidden bg-white group-hover:border-vibrant-orange/50 transition-all duration-300 touch-none shadow-inner">
-                            <SignatureCanvas
-                                ref={sigCanvas}
-                                penColor={penColor}
-                                minWidth={penWidth * 0.5}
-                                maxWidth={penWidth * 1.5}
-                                canvasProps={{
-                                    className: "w-full h-64 cursor-crosshair",
-                                }}
-                                backgroundColor="rgba(255,255,255,0)"
-                            />
+                    {/* Signature Area */}
+                    <div className="space-y-4 relative">
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+                            <label className="flex items-center gap-3 font-bold text-2xl">
+                                <div className="bg-gradient-to-br from-vibrant-orange to-vibrant-pink p-2.5 rounded-xl text-white shadow-lg shadow-vibrant-orange/30">
+                                    <PenTool size={24} />
+                                </div>
+                                <span className="bg-clip-text text-transparent bg-gradient-to-r from-gray-800 to-gray-600">
+                                    請在此簽名
+                                </span>
+                            </label>
+
+                            {/* Pen Controls */}
+                            <div className="flex items-center gap-4 bg-white p-2 rounded-2xl border border-gray-100 shadow-sm">
+                                {/* Colors */}
+                                <div className="flex gap-2 pr-4 border-r border-gray-200">
+                                    <button type="button" onClick={() => setPenColor('black')} className={`w-8 h-8 rounded-full bg-black transition-all shadow-sm ${penColor === 'black' ? 'scale-110 ring-2 ring-offset-2 ring-gray-400' : 'hover:scale-105 hover:shadow-md'}`} title="黑色" />
+                                    <button type="button" onClick={() => setPenColor('#2563eb')} className={`w-8 h-8 rounded-full bg-blue-600 transition-all shadow-sm ${penColor === '#2563eb' ? 'scale-110 ring-2 ring-offset-2 ring-blue-400' : 'hover:scale-105 hover:shadow-md'}`} title="藍色" />
+                                    <button type="button" onClick={() => setPenColor('#dc2626')} className={`w-8 h-8 rounded-full bg-red-600 transition-all shadow-sm ${penColor === '#dc2626' ? 'scale-110 ring-2 ring-offset-2 ring-red-400' : 'hover:scale-105 hover:shadow-md'}`} title="紅色" />
+                                </div>
+
+                                {/* Thickness */}
+                                <div className="flex gap-2 items-center">
+                                    <button type="button" onClick={() => setPenWidth(1)} className={`p-2 rounded-lg transition-all ${penWidth === 1 ? 'bg-gray-100 text-gray-900 shadow-inner' : 'text-gray-400 hover:bg-gray-50'}`} title="細">
+                                        <Circle size={8} fill="currentColor" />
+                                    </button>
+                                    <button type="button" onClick={() => setPenWidth(2.5)} className={`p-2 rounded-lg transition-all ${penWidth === 2.5 ? 'bg-gray-100 text-gray-900 shadow-inner' : 'text-gray-400 hover:bg-gray-50'}`} title="中">
+                                        <Circle size={12} fill="currentColor" />
+                                    </button>
+                                    <button type="button" onClick={() => setPenWidth(5)} className={`p-2 rounded-lg transition-all ${penWidth === 5 ? 'bg-gray-100 text-gray-900 shadow-inner' : 'text-gray-400 hover:bg-gray-50'}`} title="粗">
+                                        <Circle size={16} fill="currentColor" />
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                        <motion.button
-                            type="button"
-                            whileHover={{ scale: 1.1, rotate: 10 }}
-                            whileTap={{ scale: 0.9 }}
-                            onClick={clearCanvas}
-                            className="absolute top-4 right-4 p-3 bg-gray-100 text-gray-500 rounded-full hover:bg-red-50 hover:text-red-500 transition-colors shadow-md border border-gray-200"
-                            title="清除重簽"
-                        >
-                            <Eraser size={20} />
-                        </motion.button>
-                        <div className="absolute bottom-4 right-4 pointer-events-none text-xs font-bold text-gray-200 select-none tracking-widest uppercase">
-                            Signature Pad
+
+                        <div className="relative group">
+                            {/* Gradient Border Container */}
+                            <div className="p-1.5 bg-gradient-to-r from-vibrant-blue via-vibrant-purple to-vibrant-pink rounded-[2rem] shadow-xl shadow-vibrant-purple/20 transition-all duration-300 group-hover:shadow-vibrant-purple/40 group-hover:scale-[1.005]">
+                                <div className="bg-white rounded-[1.7rem] overflow-hidden relative h-72">
+                                    <SignatureCanvas
+                                        ref={sigCanvas}
+                                        penColor={penColor}
+                                        minWidth={penWidth * 0.5}
+                                        maxWidth={penWidth * 1.5}
+                                        canvasProps={{
+                                            className: "w-full h-full cursor-crosshair",
+                                        }}
+                                        backgroundColor="rgba(255,255,255,0)"
+                                    />
+
+                                    {/* Watermark */}
+                                    <div className="absolute bottom-4 right-6 pointer-events-none text-sm font-bold text-gray-100 select-none tracking-[0.2em] uppercase">
+                                        Signature Pad
+                                    </div>
+                                </div>
+                            </div>
+
+                            <motion.button
+                                type="button"
+                                whileHover={{ scale: 1.1, rotate: 10 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={clearCanvas}
+                                className="absolute top-6 right-6 p-3 bg-white/90 backdrop-blur text-gray-500 rounded-full hover:bg-red-50 hover:text-red-500 transition-colors shadow-lg border border-gray-100 z-10"
+                                title="清除重簽"
+                            >
+                                <Eraser size={20} />
+                            </motion.button>
                         </div>
                     </div>
                 </div>
@@ -420,6 +476,11 @@ const SignatureForm: React.FC = () => {
                         <p>
                             茲同意並授權 貴校將上述影像資料用於教育推廣、成果發表、校園網頁、平面刊物及非營利之教育目的使用。
                         </p>
+                        <div style={{ marginTop: '32px', border: '2px solid #1f2937', borderRadius: '8px', backgroundColor: formData.isAgreed === 'yes' ? '#f0fdf4' : '#fef2f2', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '15px', minHeight: '40px' }}>
+                            <p style={{ fontSize: '22px', fontWeight: 'bold', margin: 0, color: formData.isAgreed === 'yes' ? '#166534' : '#991b1b', letterSpacing: '2px' }}>
+                                簽署意願：{formData.isAgreed === 'yes' ? '【 我同意授權 】' : '【 我不同意授權 】'}
+                            </p>
+                        </div>
                     </div>
 
                     {/* Student Info Table */}

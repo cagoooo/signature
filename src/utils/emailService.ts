@@ -18,6 +18,7 @@ interface EmailData {
     signature_url: string;
     timestamp: string;
     pdf_link?: string;
+    is_agreed_text?: string;
 }
 
 export const sendConsentEmail = async (data: EmailData) => {
@@ -39,6 +40,7 @@ export const sendConsentEmail = async (data: EmailData) => {
                 signature_url: data.signature_url,
                 timestamp: data.timestamp,
                 pdf_link: data.pdf_link,
+                is_agreed_text: data.is_agreed_text,
                 // Add any other template variables here
             },
             PUBLIC_KEY

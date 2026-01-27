@@ -4,6 +4,7 @@ import { collection, getDocs, query, orderBy, Timestamp, deleteDoc, doc, writeBa
 import { signOut } from 'firebase/auth';
 import { useNavigate, Link } from 'react-router-dom';
 import * as XLSX from 'xlsx';
+import { downloadBatchPDFs } from '../utils/batchDownloader';
 import { Download, LogOut, Search, Filter, Loader2, FileText, Trash2, CheckSquare, Square, Home, User, Users, Calendar, PenTool, MapPin, School } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -19,6 +20,8 @@ interface SignatureData {
     signatureUrl: string;
     timestamp: Timestamp;
     email?: string;
+    pdfUrl?: string;
+    isAgreed: boolean;
 }
 
 const TAIWAN_CITIES = [
@@ -129,6 +132,7 @@ const AdminDashboard: React.FC = () => {
             "座號": item.seat,
             "學生姓名": item.studentName,
             "家長姓名": item.parentName,
+            "簽署意願": item.isAgreed ? "同意" : "不同意",
             "家長Email": item.email || '',
             "簽署時間": item.timestamp?.toDate().toLocaleString(),
             "簽名檔連結": item.signatureUrl
@@ -164,81 +168,96 @@ const AdminDashboard: React.FC = () => {
 
             <div className="max-w-7xl mx-auto relative z-10">
                 {/* Header */}
-                <header className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 bg-white/80 backdrop-blur-xl p-6 rounded-3xl shadow-lg border border-white/60 relative overflow-hidden group hover:shadow-xl transition-all duration-300">
-                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-vibrant-blue via-vibrant-purple to-vibrant-pink"></div>
-                    <div className="z-10">
-                        <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
-                            <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-500/30">
-                                <FileText size={28} />
-                            </div>
-                            簽署管理後台
-                        </h1>
-                        <p className="text-gray-500 mt-2 ml-1 flex items-center gap-2">
-                            <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-lg text-sm font-bold border border-blue-100">
-                                Total: {signatures.length}
-                            </span>
-                            <span className="text-sm">份同意書</span>
-                        </p>
-                    </div>
-                    <div className="flex flex-wrap gap-3 w-full md:w-auto z-10 justify-center md:justify-end">
-                        <AnimatePresence>
-                            {selectedIds.size > 0 && (
-                                <motion.button
-                                    initial={{ opacity: 0, scale: 0.9 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    exit={{ opacity: 0, scale: 0.9 }}
-                                    onClick={handleBatchDelete}
-                                    className="bg-red-50 text-red-600 hover:bg-red-100 px-5 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 border border-red-200 shadow-sm"
-                                >
-                                    <Trash2 size={18} />
-                                    刪除 ({selectedIds.size})
-                                </motion.button>
-                            )}
-                        </AnimatePresence>
+                <header className="mb-8 relative group">
+                    <div className="absolute -inset-1 bg-gradient-to-r from-vibrant-blue via-vibrant-purple to-vibrant-pink rounded-[2rem] blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
+                    <div className="relative flex flex-col md:flex-row justify-between items-center gap-4 bg-white/90 backdrop-blur-xl p-6 rounded-[1.8rem] shadow-xl border border-white/50">
+                        <div className="z-10">
+                            <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
+                                <div className="bg-gradient-to-br from-vibrant-blue to-vibrant-purple p-3 rounded-2xl text-white shadow-lg shadow-vibrant-blue/30">
+                                    <FileText size={28} />
+                                </div>
+                                <span className="bg-clip-text text-transparent bg-gradient-to-r from-gray-800 to-gray-600">
+                                    簽署管理後台
+                                </span>
+                            </h1>
+                            <p className="text-gray-500 mt-2 ml-1 flex items-center gap-2">
+                                <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-lg text-sm font-bold border border-blue-100 shadow-sm">
+                                    Total: {signatures.length}
+                                </span>
+                                <span className="text-sm font-medium">份同意書</span>
+                            </p>
+                        </div>
+                        <div className="flex flex-wrap gap-3 w-full md:w-auto z-10 justify-center md:justify-end">
+                            <AnimatePresence>
+                                {selectedIds.size > 0 && (
+                                    <motion.button
+                                        initial={{ opacity: 0, scale: 0.9 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.9 }}
+                                        onClick={handleBatchDelete}
+                                        className="bg-red-50 text-red-600 hover:bg-red-100 px-5 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 border border-red-200 shadow-sm hover:shadow-md"
+                                    >
+                                        <Trash2 size={18} />
+                                        刪除 ({selectedIds.size})
+                                    </motion.button>
+                                )}
+                            </AnimatePresence>
 
-                        <Link to="/" className="bg-white hover:bg-gray-50 text-gray-600 px-5 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 border border-gray-200 shadow-sm hover:shadow-md hover:text-blue-600">
-                            <Home size={18} />
-                            回首頁
-                        </Link>
+                            <button
+                                onClick={() => downloadBatchPDFs(filteredSignatures.filter(s => selectedIds.has(s.id)))}
+                                disabled={selectedIds.size === 0}
+                                className={`px-5 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 border border-gray-200 shadow-sm ${selectedIds.size > 0 ? 'bg-white hover:bg-gray-50 text-vibrant-purple hover:text-vibrant-pink hover:border-vibrant-purple/30 cursor-pointer' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+                            >
+                                <FileText size={18} />
+                                下載 PDF ({selectedIds.size})
+                            </button>
 
-                        <button
-                            onClick={exportToExcel}
-                            className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-500/30 transition-all flex items-center gap-2"
-                        >
-                            <Download size={18} />
-                            匯出 Excel
-                        </button>
+                            <Link to="/" className="bg-white hover:bg-gray-50 text-gray-600 px-5 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 border border-gray-200 shadow-sm hover:shadow-md hover:text-vibrant-blue hover:border-vibrant-blue/30">
+                                <Home size={18} />
+                                回首頁
+                            </Link>
 
-                        <button
-                            onClick={handleLogout}
-                            className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-5 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2"
-                        >
-                            <LogOut size={18} />
-                            登出
-                        </button>
+                            <button
+                                onClick={exportToExcel}
+                                className="bg-gradient-to-r from-emerald-400 to-teal-500 hover:from-emerald-500 hover:to-teal-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/40 transition-all flex items-center gap-2 transform hover:-translate-y-0.5"
+                            >
+                                <Download size={18} />
+                                匯出 Excel
+                            </button>
+
+                            <button
+                                onClick={handleLogout}
+                                className="bg-gradient-to-r from-rose-400 to-red-500 hover:from-rose-500 hover:to-red-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-rose-500/30 hover:shadow-rose-500/40 transition-all flex items-center gap-2 transform hover:-translate-y-0.5"
+                            >
+                                <LogOut size={18} />
+                                登出
+                            </button>
+                        </div>
                     </div>
                 </header>
 
                 {/* Filters */}
-                <div className="bg-white/80 backdrop-blur-xl p-6 rounded-3xl shadow-sm border border-white/60 mb-8 grid grid-cols-1 md:grid-cols-5 gap-4">
-                    <div className="relative md:col-span-1 group">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" size={20} />
+                <div className="bg-white/80 backdrop-blur-xl p-6 rounded-[2rem] shadow-lg border-2 border-vibrant-purple/10 mb-8 grid grid-cols-1 md:grid-cols-5 gap-4 relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-vibrant-blue/5 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none"></div>
+
+                    <div className="relative md:col-span-1 group/input">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within/input:text-vibrant-blue transition-colors" size={20} />
                         <input
                             type="text"
                             placeholder="搜尋..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-gray-100 focus:border-blue-500 focus:bg-white bg-gray-50/50 outline-none transition-all"
+                            className="w-full pl-12 pr-4 py-3.5 rounded-2xl border-2 border-gray-100 focus:border-vibrant-blue focus:ring-4 focus:ring-vibrant-blue/10 bg-white/50 focus:bg-white outline-none transition-all font-medium text-gray-700 placeholder-gray-400"
                         />
                     </div>
 
                     {/* City Filter */}
-                    <div className="relative group">
-                        <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" size={20} />
+                    <div className="relative group/input">
+                        <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within/input:text-vibrant-teal transition-colors" size={20} />
                         <select
                             value={cityFilter}
                             onChange={(e) => setCityFilter(e.target.value)}
-                            className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-gray-100 focus:border-blue-500 focus:bg-white bg-gray-50/50 outline-none transition-all appearance-none cursor-pointer"
+                            className="w-full pl-12 pr-4 py-3.5 rounded-2xl border-2 border-gray-100 focus:border-vibrant-teal focus:ring-4 focus:ring-vibrant-teal/10 bg-white/50 focus:bg-white outline-none transition-all appearance-none cursor-pointer font-medium text-gray-700"
                         >
                             <option value="">所有縣市</option>
                             {TAIWAN_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
@@ -246,34 +265,34 @@ const AdminDashboard: React.FC = () => {
                     </div>
 
                     {/* School Filter */}
-                    <div className="relative group">
-                        <School className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" size={20} />
+                    <div className="relative group/input">
+                        <School className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within/input:text-vibrant-blue transition-colors" size={20} />
                         <input
                             type="text"
                             placeholder="學校名稱..."
                             value={schoolFilter}
                             onChange={(e) => setSchoolFilter(e.target.value)}
-                            className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-gray-100 focus:border-blue-500 focus:bg-white bg-gray-50/50 outline-none transition-all"
+                            className="w-full pl-12 pr-4 py-3.5 rounded-2xl border-2 border-gray-100 focus:border-vibrant-blue focus:ring-4 focus:ring-vibrant-blue/10 bg-white/50 focus:bg-white outline-none transition-all font-medium text-gray-700 placeholder-gray-400"
                         />
                     </div>
 
-                    <div className="relative group">
-                        <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" size={20} />
+                    <div className="relative group/input">
+                        <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within/input:text-vibrant-purple transition-colors" size={20} />
                         <select
                             value={gradeFilter}
                             onChange={(e) => setGradeFilter(e.target.value)}
-                            className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-gray-100 focus:border-blue-500 focus:bg-white bg-gray-50/50 outline-none transition-all appearance-none cursor-pointer"
+                            className="w-full pl-12 pr-4 py-3.5 rounded-2xl border-2 border-gray-100 focus:border-vibrant-purple focus:ring-4 focus:ring-vibrant-purple/10 bg-white/50 focus:bg-white outline-none transition-all appearance-none cursor-pointer font-medium text-gray-700"
                         >
                             <option value="">所有年級</option>
                             {grades.map(g => <option key={g} value={g}>{g} 年級</option>)}
                         </select>
                     </div>
-                    <div className="relative group">
-                        <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" size={20} />
+                    <div className="relative group/input">
+                        <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within/input:text-vibrant-pink transition-colors" size={20} />
                         <select
                             value={classFilter}
                             onChange={(e) => setClassFilter(e.target.value)}
-                            className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-gray-100 focus:border-blue-500 focus:bg-white bg-gray-50/50 outline-none transition-all appearance-none cursor-pointer"
+                            className="w-full pl-12 pr-4 py-3.5 rounded-2xl border-2 border-gray-100 focus:border-vibrant-pink focus:ring-4 focus:ring-vibrant-pink/10 bg-white/50 focus:bg-white outline-none transition-all appearance-none cursor-pointer font-medium text-gray-700"
                         >
                             <option value="">所有班級</option>
                             {classes.map(c => <option key={c} value={c}>{c} 班</option>)}
@@ -306,6 +325,7 @@ const AdminDashboard: React.FC = () => {
                                             <th className="p-5 font-bold tracking-wide">座號</th>
                                             <th className="p-5 font-bold tracking-wide">學生姓名</th>
                                             <th className="p-5 font-bold tracking-wide">家長姓名</th>
+                                            <th className="p-5 font-bold tracking-wide">簽署意願</th>
                                             <th className="p-5 font-bold tracking-wide">簽署時間</th>
                                             <th className="p-5 font-bold tracking-wide">簽名預覽</th>
                                             <th className="p-5 font-bold tracking-wide text-right last:rounded-tr-2xl">操作</th>
@@ -349,24 +369,42 @@ const AdminDashboard: React.FC = () => {
                                                     </td>
                                                     <td className="p-5 font-bold text-gray-800 text-lg">{item.studentName}</td>
                                                     <td className="p-5 text-gray-600 font-medium">{item.parentName}</td>
+                                                    <td className="p-5">
+                                                        <span className={`px-3 py-1 rounded-full text-sm font-bold shadow-sm border ${item.isAgreed ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-700 border-red-200'}`}>
+                                                            {item.isAgreed ? '同意' : '不同意'}
+                                                        </span>
+                                                    </td>
                                                     <td className="p-5 text-gray-500 text-sm font-mono">
                                                         {item.timestamp?.toDate().toLocaleString()}
                                                     </td>
                                                     <td className="p-5">
-                                                        <div className="w-28 h-12 bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-blue-400 hover:shadow-md transition-all group relative cursor-pointer">
-                                                            <img
-                                                                src={item.signatureUrl}
-                                                                alt="簽名"
-                                                                className="w-full h-full object-contain p-1"
-                                                            />
-                                                            <a
-                                                                href={item.signatureUrl}
-                                                                target="_blank"
-                                                                rel="noreferrer"
-                                                                className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white text-xs font-bold backdrop-blur-sm"
-                                                            >
-                                                                放大檢視
-                                                            </a>
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-24 h-10 bg-white border border-gray-200 rounded-lg overflow-hidden hover:border-blue-400 hover:shadow-md transition-all group/img relative cursor-pointer">
+                                                                <img
+                                                                    src={item.signatureUrl}
+                                                                    alt="簽名"
+                                                                    className="w-full h-full object-contain p-1"
+                                                                />
+                                                                <a
+                                                                    href={item.signatureUrl}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity text-white text-[10px] font-bold backdrop-blur-sm"
+                                                                >
+                                                                    放大
+                                                                </a>
+                                                            </div>
+                                                            {item.pdfUrl && (
+                                                                <a
+                                                                    href={item.pdfUrl}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                                                    title="下載 PDF"
+                                                                >
+                                                                    <FileText size={18} />
+                                                                </a>
+                                                            )}
                                                         </div>
                                                     </td>
                                                     <td className="p-5 text-right">
@@ -431,6 +469,9 @@ const AdminDashboard: React.FC = () => {
                                                             </span>
                                                             <span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded-md text-xs font-bold border border-purple-100 flex items-center gap-1">
                                                                 <Users size={10} /> {item.cls}班
+                                                            </span>
+                                                            <span className={`${item.isAgreed ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'} px-2 py-0.5 rounded-md text-xs font-bold border flex items-center gap-1`}>
+                                                                {item.isAgreed ? '同意' : '不同意'}
                                                             </span>
                                                         </div>
                                                     </div>

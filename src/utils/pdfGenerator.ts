@@ -9,6 +9,7 @@ interface SignatureData {
     seat: string;
     signatureUrl: string;
     timestamp: any;
+    isAgreed: boolean;
 }
 
 export const generateConsentPDF = async (data: SignatureData, options?: { returnBlob?: boolean }): Promise<Blob | void> => {
@@ -40,7 +41,13 @@ export const generateConsentPDF = async (data: SignatureData, options?: { return
                     <p>本授權書僅限於上述目的使用，絕不挪作他用。</p>
                 </div>
 
-                <div style="margin-top: 40px; border-top: 1px dashed #999; padding-top: 30px;">
+                <div style="margin-top: 20px; border: 2px solid #000; border-radius: 8px; background-color: ${data.isAgreed ? '#f0fdf4' : '#fef2f2'}; display: flex; justify-content: center; align-items: center; padding: 15px; min-height: 40px;">
+                    <p style="font-size: 22px; font-weight: bold; margin: 0; color: ${data.isAgreed ? '#166534' : '#991b1b'}; letter-spacing: 2px;">
+                        簽署意願：${data.isAgreed ? '【 我同意授權 】' : '【 我不同意授權 】'}
+                    </p>
+                </div>
+
+                <div style="margin-top: 30px; border-top: 1px dashed #999; padding-top: 20px;">
                     <h2 style="font-size: 20px; margin-bottom: 20px; font-weight: bold;">學生資料</h2>
                     <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
                         <tr>

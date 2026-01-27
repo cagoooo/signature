@@ -39,19 +39,21 @@ function Home() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5, duration: 0.8 }}
-          className="mt-16 mb-8 flex justify-center"
+          className="mt-16 mb-8 flex justify-center relative z-10"
         >
-          <div className="bg-white/60 backdrop-blur-md border border-white/50 rounded-full px-6 py-3 shadow-sm flex flex-col md:flex-row items-center justify-center gap-2 md:gap-4 hover:shadow-md transition-all duration-300 hover:scale-105">
-            <span className="text-gray-600 font-bold text-sm bg-clip-text text-transparent bg-gradient-to-r from-gray-600 to-gray-800">
-              &copy; {new Date().getFullYear()} 學校行政單位
-            </span>
-            <span className="hidden md:block text-gray-300">|</span>
-            <span className="flex items-center gap-1.5 text-sm font-medium text-gray-500">
-              Designed with
-              <span className="animate-bounce inline-block filter drop-shadow-sm">🌈</span>
-              &
-              <span className="animate-pulse inline-block text-red-500 filter drop-shadow-sm">❤️</span>
-            </span>
+          <div className="p-[3px] bg-gradient-to-r from-vibrant-blue via-vibrant-purple to-vibrant-pink rounded-full shadow-lg shadow-vibrant-purple/20 hover:shadow-vibrant-purple/40 transition-shadow duration-300">
+            <div className="bg-white/90 backdrop-blur-xl rounded-full px-8 py-4 flex flex-col md:flex-row items-center justify-center gap-3 md:gap-6">
+              <span className="font-bold text-base bg-clip-text text-transparent bg-gradient-to-r from-vibrant-blue to-vibrant-purple">
+                &copy; {new Date().getFullYear()} 學校行政單位
+              </span>
+              <span className="hidden md:block text-gray-300">|</span>
+              <span className="flex items-center gap-2 text-sm font-bold text-gray-600">
+                Designed with
+                <span className="animate-bounce inline-block filter drop-shadow-sm text-lg">🌈</span>
+                &
+                <span className="animate-pulse inline-block text-red-500 filter drop-shadow-sm text-lg">❤️</span>
+              </span>
+            </div>
           </div>
         </motion.footer>
 

@@ -18,6 +18,7 @@ interface SignatureData {
     seat: string;
     signatureUrl: string;
     timestamp: any;
+    isAgreed: boolean;
 }
 
 const PAGE_SIZE = 20;
@@ -400,6 +401,9 @@ const Dashboard: React.FC = () => {
                                             <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-xl text-sm font-medium">
                                                 {sig.seat}號
                                             </span>
+                                            <span className={`px-3 py-1 rounded-xl text-sm font-bold shadow-sm border ${sig.isAgreed ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-700 border-red-200'}`}>
+                                                {sig.isAgreed ? '同意' : '不同意'}
+                                            </span>
                                         </div>
                                     </div>
                                     <button
@@ -454,6 +458,7 @@ const Dashboard: React.FC = () => {
                                     <th className="px-8 py-5 text-sm font-bold text-gray-500 uppercase tracking-wider">座號</th>
                                     <th className="px-8 py-5 text-sm font-bold text-gray-500 uppercase tracking-wider">學生姓名</th>
                                     <th className="px-8 py-5 text-sm font-bold text-gray-500 uppercase tracking-wider">家長姓名</th>
+                                    <th className="px-8 py-5 text-sm font-bold text-gray-500 uppercase tracking-wider">意願</th>
                                     <th className="px-8 py-5 text-sm font-bold text-gray-500 uppercase tracking-wider">簽名</th>
                                     <th className="px-8 py-5 text-sm font-bold text-gray-500 uppercase tracking-wider">時間</th>
                                     <th className="px-6 py-5 text-sm font-bold text-gray-500 uppercase tracking-wider text-right">操作</th>
@@ -497,6 +502,11 @@ const Dashboard: React.FC = () => {
                                             <td className="px-8 py-5 text-gray-700 font-medium">{sig.seat}</td>
                                             <td className="px-8 py-5 text-gray-900 font-bold text-lg">{sig.studentName}</td>
                                             <td className="px-8 py-5 text-gray-600 font-medium">{sig.parentName}</td>
+                                            <td className="px-8 py-5">
+                                                <span className={`px-2 py-1 rounded-lg text-xs font-bold border ${sig.isAgreed ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                                                    {sig.isAgreed ? '同意' : '不同意'}
+                                                </span>
+                                            </td>
                                             <td className="px-8 py-5">
                                                 <button
                                                     onClick={() => setSelectedSignature(sig)}
@@ -568,6 +578,9 @@ const Dashboard: React.FC = () => {
                                     <span className="bg-emerald-500/90 backdrop-blur-md px-3 py-1 rounded-lg text-sm font-bold border border-white/10 flex items-center gap-1">
                                         <CheckCircle size={14} />
                                         已簽署
+                                    </span>
+                                    <span className={`${selectedSignature.isAgreed ? 'bg-green-500/90' : 'bg-red-500/90'} backdrop-blur-md px-3 py-1 rounded-lg text-sm font-bold border border-white/10`}>
+                                        {selectedSignature.isAgreed ? '同意授權' : '不同意授權'}
                                     </span>
                                 </div>
                             </div>
