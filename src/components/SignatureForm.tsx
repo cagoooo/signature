@@ -127,14 +127,19 @@ const SignatureForm: React.FC = () => {
             if (!pdfRef.current) throw new Error("PDF Template not found");
 
             const pdfCanvas = await html2canvas(pdfRef.current, {
-                // 1.5 仍適合 A4 閱讀，同時避免手機產生超過 Storage 上限的 PDF。
-                scale: 1.5,
+                // 1.25 搭配 jsPDF 壓縮即可維持 A4 閱讀清晰度，並降低手機處理負擔。
+                scale: 1.25,
                 useCORS: true,
                 logging: false
             });
 
             const imgData = pdfCanvas.toDataURL('image/png');
-            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdf = new jsPDF({
+                orientation: 'p',
+                unit: 'mm',
+                format: 'a4',
+                compress: true,
+            });
             const pdfWidth = pdf.internal.pageSize.getWidth();
             const pdfHeight = (pdfCanvas.height * pdfWidth) / pdfCanvas.width;
 
