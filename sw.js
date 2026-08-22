@@ -1,6 +1,6 @@
 // BUILD_VERSION 由 Vite build plugin 在 dist 產出時自動注入。
 // 請勿在原始檔手動填入固定版本，否則瀏覽器不會偵測到新版 SW。
-const BUILD_VERSION = "20260822092503-2b45d86";
+const BUILD_VERSION = "20260822094515-86f2fe9";
 const CACHE_NAME = `signature-${BUILD_VERSION}`;
 
 // 不快取 index.html：Vite 每次建置都會產生新的 hashed chunk，HTML 必須走 network-first。
