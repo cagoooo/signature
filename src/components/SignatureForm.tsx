@@ -29,6 +29,15 @@ const TAIWAN_CITIES = [
     "高雄市", "屏東縣", "宜蘭縣", "花蓮縣", "臺東縣", "澎湖縣", "金門縣", "連江縣"
 ];
 
+const safeStorageName = (value: string) => {
+    const sanitized = value
+        .trim()
+        .replace(/[\\/:*?"<>|#%]/g, '_')
+        .replace(/\s+/g, '_')
+        .slice(0, 80);
+    return sanitized || '未命名';
+};
+
 const SignatureForm: React.FC = () => {
     const sigCanvas = useRef<SignatureCanvas>(null);
     const pdfRef = useRef<HTMLDivElement>(null); // Reference for the PDF template
@@ -134,7 +143,7 @@ const SignatureForm: React.FC = () => {
             currentStage = 'upload_pdf';
             progress = 40;
             const timestamp = Date.now();
-            const pdfFileName = `${formData.city}_${formData.school}_${formData.studentName}_${timestamp}.pdf`;
+            const pdfFileName = `${safeStorageName(formData.city)}_${safeStorageName(formData.school)}_${safeStorageName(formData.studentName)}_${timestamp}.pdf`;
             const storageRef = ref(storage, `consents/${pdfFileName}`);
 
             await uploadBytes(storageRef, pdfBlob, { contentType: 'application/pdf' });
@@ -148,9 +157,9 @@ const SignatureForm: React.FC = () => {
             progress = 60;
             const sigBlob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
             if (!sigBlob) throw new Error('簽名圖檔產生失敗');
-            const sigFileName = `sig_${formData.city}_${formData.school}_${formData.studentName}_${timestamp}.png`;
+            const sigFileName = `sig_${safeStorageName(formData.city)}_${safeStorageName(formData.school)}_${safeStorageName(formData.studentName)}_${timestamp}.png`;
             const sigRef = ref(storage, `signatures/${sigFileName}`);
-            await uploadBytes(sigRef, sigBlob);
+            await uploadBytes(sigRef, sigBlob, { contentType: 'image/png' });
             const sigDownloadURL = await getDownloadURL(sigRef);
 
             // 4. Save the signed record. The Firestore trigger sends the success notification.
