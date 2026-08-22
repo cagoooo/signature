@@ -22,16 +22,14 @@ function createBuildVersion() {
   };
 }
 
-function buildVersionPlugin(): Plugin {
+function buildVersionPlugin(buildInfo: ReturnType<typeof createBuildVersion>): Plugin {
   let resolvedConfig: ResolvedConfig;
-  let buildInfo = createBuildVersion();
 
   return {
     name: 'signature-build-version',
     apply: 'build',
     configResolved(config) {
       resolvedConfig = config;
-      buildInfo = createBuildVersion();
     },
     writeBundle() {
       const outputDirectory = resolve(resolvedConfig.root, resolvedConfig.build.outDir);
@@ -60,8 +58,13 @@ function buildVersionPlugin(): Plugin {
   };
 }
 
+const buildInfo = createBuildVersion();
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), buildVersionPlugin()],
+  define: {
+    __SIGNATURE_BUILD_VERSION__: JSON.stringify(buildInfo.version),
+  },
+  plugins: [react(), buildVersionPlugin(buildInfo)],
   base: '/signature/',
 })

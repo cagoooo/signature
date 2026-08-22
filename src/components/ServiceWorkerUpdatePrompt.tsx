@@ -13,6 +13,17 @@ type VersionPayload = {
 
 const CHUNK_ERROR_PATTERN = /Loading chunk|Failed to fetch dynamically imported module|ChunkLoadError|Importing a module script failed/i;
 const CHUNK_RECOVERY_KEY = 'signature-chunk-recovery-attempted';
+const APP_BUILD_VERSION = __SIGNATURE_BUILD_VERSION__;
+
+function isNewerBuildVersion(serverVersion: string, currentVersion: string | null): boolean {
+    if (!currentVersion || serverVersion === currentVersion) return false;
+
+    const serverTimestamp = serverVersion.match(/^\d{14}/)?.[0];
+    const currentTimestamp = currentVersion.match(/^\d{14}/)?.[0];
+    if (serverTimestamp && currentTimestamp) return serverTimestamp > currentTimestamp;
+
+    return serverVersion > currentVersion;
+}
 
 function toErrorMessage(value: unknown): string {
     if (value instanceof Error) return `${value.name}: ${value.message}`;
@@ -32,7 +43,7 @@ export default function ServiceWorkerUpdatePrompt() {
     const [notice, setNotice] = useState<UpdateNotice | null>(null);
     const registrationRef = useRef<ServiceWorkerRegistration | null>(null);
     const waitingWorkerRef = useRef<ServiceWorker | null>(null);
-    const currentVersionRef = useRef<string | null>(null);
+    const currentVersionRef = useRef<string | null>(APP_BUILD_VERSION);
     const pendingVersionRef = useRef<string | null>(null);
     const announcedVersionRef = useRef<string | null>(null);
     const reloadingRef = useRef(false);
@@ -89,12 +100,7 @@ export default function ServiceWorkerUpdatePrompt() {
             const registration = registrationRef.current;
             if (registration) await registration.update().catch(() => undefined);
 
-            if (!currentVersionRef.current) {
-                currentVersionRef.current = serverVersion;
-                return;
-            }
-
-            if (serverVersion === currentVersionRef.current) return;
+            if (!isNewerBuildVersion(serverVersion, currentVersionRef.current)) return;
             pendingVersionRef.current = serverVersion;
 
             if (registration) {
