@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">家長線上簽名系統</title>
+  <desc id="desc">以藍紫粉漸層呈現的簽名筆畫圖示</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3b82f6" />
+      <stop offset="0.52" stop-color="#8b5cf6" />
+      <stop offset="1" stop-color="#ec4899" />
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.96" />
+      <stop offset="1" stop-color="#fdf2f8" stop-opacity="0.9" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#bg)" />
+  <circle cx="405" cy="108" r="30" fill="#ffffff" opacity="0.2" />
+  <circle cx="102" cy="407" r="42" fill="#ffffff" opacity="0.12" />
+  <path
+    d="M102 302c39 0 39-74 78-92 28-13 40 8 37 34-4 34-46 66-56 91-12 31 18 45 45 30 41-22 63-75 89-111 20-28 51-51 67-26 18 29-4 68-31 89-34 27-81 41-115 60-28 16-51 34-39 55 10 18 40 20 73 5 39-18 77-48 117-79"
+    fill="none"
+    stroke="url(#shine)"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    stroke-width="25"
+  />
+  <path d="M110 386h288" fill="none" stroke="#ffffff" stroke-linecap="round" stroke-width="18" opacity="0.92" />
+  <path d="M363 350l46 46-21 21-46-46z" fill="#fef3c7" opacity="0.96" />
+  <path d="M342 329l21 21-22 22-22-22z" fill="#f59e0b" opacity="0.95" />
+</svg>
