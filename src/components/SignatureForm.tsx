@@ -9,6 +9,7 @@ import confetti from 'canvas-confetti';
 import { sendConsentEmail } from '../utils/emailService';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { notifySignatureFailure } from '../utils/notificationService';
 
 interface FormData {
     city: string;
@@ -94,10 +95,16 @@ const SignatureForm: React.FC = () => {
 
         setLoading(true);
 
+        let currentStage: 'prepare' | 'generate_pdf' | 'upload_pdf' | 'upload_signature' | 'save_firestore' | 'send_email' | 'complete' = 'prepare';
+        let progress = 0;
+        let signatureDocId: string | undefined;
+
         try {
             // 1. Get Signature Image
+            currentStage = 'prepare';
+            progress = 5;
             const canvas = sigCanvas.current?.getCanvas();
-            if (!canvas) return;
+            if (!canvas) throw new Error('簽名畫布不存在');
             const signatureDataUrl = canvas.toDataURL('image/png');
             setSignatureImage(signatureDataUrl); // Update state for PDF rendering
 
@@ -105,6 +112,8 @@ const SignatureForm: React.FC = () => {
             await new Promise(resolve => setTimeout(resolve, 500));
 
             // 2. Generate PDF
+            currentStage = 'generate_pdf';
+            progress = 20;
             if (!pdfRef.current) throw new Error("PDF Template not found");
 
             const pdfCanvas = await html2canvas(pdfRef.current, {
@@ -122,6 +131,8 @@ const SignatureForm: React.FC = () => {
             const pdfBlob = pdf.output('blob');
 
             // 3. Upload PDF to Firebase Storage
+            currentStage = 'upload_pdf';
+            progress = 40;
             const timestamp = Date.now();
             const pdfFileName = `${formData.city}_${formData.school}_${formData.studentName}_${timestamp}.pdf`;
             const storageRef = ref(storage, `consents/${pdfFileName}`);
@@ -133,28 +144,33 @@ const SignatureForm: React.FC = () => {
 
 
             // Re-upload signature image for dashboard compatibility
+            currentStage = 'upload_signature';
+            progress = 60;
             const sigBlob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
-            if (sigBlob) {
-                const sigFileName = `sig_${formData.city}_${formData.school}_${formData.studentName}_${timestamp}.png`;
-                const sigRef = ref(storage, `signatures/${sigFileName}`);
-                await uploadBytes(sigRef, sigBlob);
-                const sigDownloadURL = await getDownloadURL(sigRef);
+            if (!sigBlob) throw new Error('簽名圖檔產生失敗');
+            const sigFileName = `sig_${formData.city}_${formData.school}_${formData.studentName}_${timestamp}.png`;
+            const sigRef = ref(storage, `signatures/${sigFileName}`);
+            await uploadBytes(sigRef, sigBlob);
+            const sigDownloadURL = await getDownloadURL(sigRef);
 
-                // Update Firestore with both URLs
-                await addDoc(collection(db, "signatures"), {
-                    ...formData,
-                    signatureUrl: sigDownloadURL,
-                    pdfUrl: pdfDownloadURL,
-                    isAgreed: formData.isAgreed === 'yes', // Store as boolean for easier filtering
-                    timestamp: serverTimestamp(),
-                    userAgent: navigator.userAgent
-                });
-            }
+            // 4. Save the signed record. The Firestore trigger sends the success notification.
+            currentStage = 'save_firestore';
+            progress = 80;
+            const signatureDoc = await addDoc(collection(db, "signatures"), {
+                ...formData,
+                signatureUrl: sigDownloadURL,
+                pdfUrl: pdfDownloadURL,
+                isAgreed: formData.isAgreed === 'yes', // Store as boolean for easier filtering
+                timestamp: serverTimestamp(),
+                userAgent: navigator.userAgent
+            });
+            signatureDocId = signatureDoc.id;
 
             // 5. Send Email with PDF Link
-            // 5. Send Email with PDF Link
+            currentStage = 'send_email';
+            progress = 90;
             if (formData.email) {
-                await sendConsentEmail({
+                const emailResult = await sendConsentEmail({
                     to_email: formData.email,
                     to_name: formData.parentName,
                     city: formData.city,
@@ -168,12 +184,24 @@ const SignatureForm: React.FC = () => {
                     pdf_link: pdfDownloadURL,
                     is_agreed_text: formData.isAgreed === 'yes' ? '【同意】' : '【不同意】'
                 });
+                if (emailResult.status !== 'success') {
+                    throw new Error('Email 通知寄送失敗');
+                }
             }
 
+            currentStage = 'complete';
+            progress = 100;
             setSubmitted(true);
             triggerConfetti();
         } catch (error) {
             console.error("Error submitting form: ", error);
+            notifySignatureFailure({
+                stage: currentStage,
+                progress,
+                message: error instanceof Error ? error.message : String(error),
+                context: 'SignatureForm.handleSubmit',
+                recordId: signatureDocId,
+            });
             alert("上傳失敗，請稍後再試。");
         } finally {
             setLoading(false);

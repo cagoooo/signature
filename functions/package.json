@@ -1,0 +1,16 @@
+{
+  "name": "signature-functions",
+  "description": "家長線上簽名系統的 Google Chat 通知 Cloud Functions",
+  "private": true,
+  "main": "index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "check": "node --check index.js"
+  },
+  "dependencies": {
+    "firebase-functions": "^7.2.5"
+  }
+}

@@ -4,6 +4,8 @@ import AdminDashboard from './components/AdminDashboard';
 import ProtectedRoute from './components/ProtectedRoute';
 import { motion } from 'framer-motion';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { useEffect } from 'react';
+import { flushSignatureFailureQueue } from './utils/notificationService';
 
 function Home() {
   return (
@@ -71,6 +73,10 @@ function Home() {
 }
 
 function App() {
+  useEffect(() => {
+    void flushSignatureFailureQueue();
+  }, []);
+
   return (
     <Router basename="/signature">
       <Routes>

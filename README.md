@@ -27,10 +27,14 @@
     *   **📧 Email 通知升級 (v2.2.0)**：
         *   通知信件包含 PDF 下載連結。
         *   信件內容新增縣市與學校資訊。
-    *   **✅ 簽署意願選項 (v2.3.0)**：
+*   **✅ 簽署意願選項 (v2.3.0)**：
         *   新增「同意/不同意」單選按鈕，強制家長確認意願。
         *   PDF 與 Email 同步顯示簽署意願 (同意為綠色，不同意為紅色)。
         *   後台列表新增「意願」欄位，並支援 Excel 匯出。
+*   **🔔 Google Chat 即時通知 (v2.4.0)**：
+        *   Firestore 成功建立簽名資料後，由 Cloud Function 推送成功卡片。
+        *   PDF、簽名圖檔、Firestore 或 Email 階段失敗時，前端回報失敗階段與進度。
+        *   Webhook 僅存於 Firebase Secret Manager，不會放進 GitHub Pages 前端。
 
 ## 🚀 安裝與執行
 
@@ -45,7 +49,23 @@ npm run dev
 ```
 啟動後請訪問 `http://localhost:5173`。
 
-### 3. 建置正式版
+### 3. 設定 Google Chat 通知
+
+本專案的通知後端位於 `functions/`，部署區域為 `asia-east1`。請先在 Google Chat 的通知空間建立 incoming webhook，再把 webhook 存入 Firebase Secret Manager；不要把網址寫進 `.ts`、`.js` 或 `.env` 後提交到公開 repository。
+
+```bash
+firebase functions:secrets:set GOOGLE_CHAT_WEBHOOK --project face-2fa85 --account=cagooo@gmail.com --data-file=<含 webhook 的本機檔案>
+firebase deploy --only functions --force --project face-2fa85 --account=cagooo@gmail.com
+```
+
+部署後，`onSignatureCreated` 會在 `signatures/{id}` 成功建立時通知；前端的 `reportSignatureFailure` 會回報目前失敗階段、進度、錯誤訊息，以及資料是否已先保存。前端 GitHub Pages 發布仍使用：
+
+```bash
+npm run build
+npm run deploy
+```
+
+### 4. 建置正式版
 ```bash
 npm run build
 ```
