@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { useEffect } from 'react';
 import { flushSignatureFailureQueue } from './utils/notificationService';
+import ServiceWorkerUpdatePrompt from './components/ServiceWorkerUpdatePrompt';
 
 const AUTHOR_PAGE_URL = 'https://www.smes.tyc.edu.tw/modules/school/index.php?department_id=2&zone_id=0&page_id=2&content_id=11&type=news&from_op=all_news#a5';
 
@@ -106,6 +107,7 @@ function App() {
 
   return (
     <Router basename="/signature">
+      <ServiceWorkerUpdatePrompt />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/admin/login" element={<AdminLogin />} />
