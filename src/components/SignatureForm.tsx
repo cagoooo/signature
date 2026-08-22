@@ -28,6 +28,7 @@ const TAIWAN_CITIES = [
     "臺中市", "彰化縣", "南投縣", "雲林縣", "嘉義市", "嘉義縣", "臺南市",
     "高雄市", "屏東縣", "宜蘭縣", "花蓮縣", "臺東縣", "澎湖縣", "金門縣", "連江縣"
 ];
+const MAX_CONSENT_PDF_BYTES = 10 * 1024 * 1024;
 
 const safeStorageName = (value: string) => {
     const sanitized = value
@@ -126,7 +127,8 @@ const SignatureForm: React.FC = () => {
             if (!pdfRef.current) throw new Error("PDF Template not found");
 
             const pdfCanvas = await html2canvas(pdfRef.current, {
-                scale: 2, // Higher scale for better quality
+                // 1.5 仍適合 A4 閱讀，同時避免手機產生超過 Storage 上限的 PDF。
+                scale: 1.5,
                 useCORS: true,
                 logging: false
             });
@@ -138,6 +140,9 @@ const SignatureForm: React.FC = () => {
 
             pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
             const pdfBlob = pdf.output('blob');
+            if (pdfBlob.size >= MAX_CONSENT_PDF_BYTES) {
+                throw new Error(`PDF 檔案過大（${(pdfBlob.size / 1024 / 1024).toFixed(1)} MB）`);
+            }
 
             // 3. Upload PDF to Firebase Storage
             currentStage = 'upload_pdf';
