@@ -21,7 +21,22 @@ interface EmailData {
     is_agreed_text?: string;
 }
 
-export const sendConsentEmail = async (data: EmailData) => {
+export type ConsentEmailResult =
+    | { status: 'success'; response: unknown }
+    | { status: 'error'; error: unknown; message: string };
+
+const describeEmailError = (error: unknown) => {
+    if (typeof error === 'object' && error !== null) {
+        const candidate = error as { status?: unknown; text?: unknown };
+        const status = typeof candidate.status === 'number' ? `HTTP ${candidate.status}` : '';
+        const text = typeof candidate.text === 'string' ? candidate.text.trim() : '';
+        return [status, text].filter(Boolean).join(': ') || 'EmailJS 未提供錯誤訊息';
+    }
+
+    return String(error || 'EmailJS 未提供錯誤訊息');
+};
+
+export const sendConsentEmail = async (data: EmailData): Promise<ConsentEmailResult> => {
 
 
     try {
@@ -41,13 +56,13 @@ export const sendConsentEmail = async (data: EmailData) => {
                 timestamp: data.timestamp,
                 pdf_link: data.pdf_link,
                 is_agreed_text: data.is_agreed_text,
-                // Add any other template variables here
             },
-            PUBLIC_KEY
+            { publicKey: PUBLIC_KEY }
         );
         return { status: 'success', response };
     } catch (error) {
-        console.error('EmailJS Error:', error);
-        return { status: 'error', error };
+        const message = describeEmailError(error);
+        console.error('EmailJS Error:', { message });
+        return { status: 'error', error, message };
     }
 };

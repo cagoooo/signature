@@ -57,6 +57,7 @@ const SignatureForm: React.FC = () => {
     const [submitted, setSubmitted] = useState(false);
     const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
     const [signatureImage, setSignatureImage] = useState<string | null>(null); // Store signature for PDF
+    const [submissionWarning, setSubmissionWarning] = useState<string | null>(null);
 
     // Pen State
     const [penColor, setPenColor] = useState('black');
@@ -104,6 +105,7 @@ const SignatureForm: React.FC = () => {
         }
 
         setLoading(true);
+        setSubmissionWarning(null);
 
         let currentStage: 'prepare' | 'generate_pdf' | 'upload_pdf' | 'upload_signature' | 'save_firestore' | 'send_email' | 'complete' = 'prepare';
         let progress = 0;
@@ -204,7 +206,15 @@ const SignatureForm: React.FC = () => {
                     is_agreed_text: formData.isAgreed === 'yes' ? '【同意】' : '【不同意】'
                 });
                 if (emailResult.status !== 'success') {
-                    throw new Error('Email 通知寄送失敗');
+                    const message = `Email 通知寄送失敗：${emailResult.message}`;
+                    setSubmissionWarning('同意書已成功保存，但備份 Email 暫時寄送失敗；請先下載 PDF，管理者已收到錯誤通知。');
+                    notifySignatureFailure({
+                        stage: currentStage,
+                        progress,
+                        message,
+                        context: 'SignatureForm.handleSubmit',
+                        recordId: signatureDocId,
+                    });
                 }
             }
 
@@ -221,7 +231,12 @@ const SignatureForm: React.FC = () => {
                 context: 'SignatureForm.handleSubmit',
                 recordId: signatureDocId,
             });
-            alert("上傳失敗，請稍後再試。");
+            if (signatureDocId) {
+                setSubmissionWarning('同意書已成功保存，但後續通知處理失敗；請先下載 PDF，管理者已收到錯誤通知。');
+                setSubmitted(true);
+            } else {
+                alert("上傳失敗，請稍後再試。");
+            }
         } finally {
             setLoading(false);
         }
@@ -243,7 +258,13 @@ const SignatureForm: React.FC = () => {
                     <CheckCircle size={80} />
                 </motion.div>
                 <h2 className="text-4xl font-heading font-bold text-gray-800 mb-4">簽署完成！🎉</h2>
-                <p className="text-gray-600 text-xl mb-8 font-medium">感謝您的配合，資料已成功送出。</p>
+                {submissionWarning ? (
+                    <p className="text-amber-700 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 text-base mb-8 font-medium">
+                        {submissionWarning}
+                    </p>
+                ) : (
+                    <p className="text-gray-600 text-xl mb-8 font-medium">感謝您的配合，資料已成功送出。</p>
+                )}
 
                 <div className="flex flex-col gap-4 w-full max-w-xs">
                     {downloadUrl && (

@@ -174,16 +174,19 @@ exports.reportSignatureFailure = onCall(
     const message = clip(data.message, 500, '未提供錯誤訊息');
     const recordId = clip(data.recordId, 120, '尚未建立');
     const context = clip(data.context, 120, 'SignatureForm');
-    const summary = `簽名服務失敗：${stageLabel(stage)}（${progress}%）`;
+    const recordSaved = recordId !== '尚未建立';
+    const summary = recordSaved
+      ? `簽名資料已保存，但${stageLabel(stage)}失敗（${progress}%）`
+      : `簽名服務失敗：${stageLabel(stage)}（${progress}%）`;
     const identity = request.auth?.token?.email || request.auth?.token?.name || '公開使用者';
 
     const payload = buildChatPayload({
       cardId: `signature-failure-${Date.now()}`,
-      title: '❌ 簽名服務失敗',
+      title: recordSaved ? '⚠️ 簽名已保存，後續處理失敗' : '❌ 簽名服務失敗',
       subtitle: '家長線上簽名系統',
       summary,
       rows: [
-        { label: '狀態', text: '失敗' },
+        { label: '狀態', text: recordSaved ? '部分成功' : '失敗' },
         { label: '進度', text: `${stageLabel(stage)}（${progress}%）` },
         { label: '錯誤訊息', text: message },
         { label: '資料是否已保存', text: recordId === '尚未建立' ? '否' : `是（${recordId}）` },
