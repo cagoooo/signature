@@ -10,6 +10,7 @@ const STAGE_LABELS = {
   prepare: '準備簽名資料',
   generate_pdf: '產生 PDF',
   upload_pdf: '上傳 PDF',
+  get_pdf_url: '取得 PDF 下載連結',
   upload_signature: '上傳簽名圖檔',
   save_firestore: '寫入簽名資料',
   send_email: '寄送 Email',

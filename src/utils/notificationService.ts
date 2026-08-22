@@ -5,6 +5,7 @@ type FailureStage =
     | 'prepare'
     | 'generate_pdf'
     | 'upload_pdf'
+    | 'get_pdf_url'
     | 'upload_signature'
     | 'save_firestore'
     | 'send_email'

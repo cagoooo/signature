@@ -107,9 +107,12 @@ const SignatureForm: React.FC = () => {
         setLoading(true);
         setSubmissionWarning(null);
 
-        let currentStage: 'prepare' | 'generate_pdf' | 'upload_pdf' | 'upload_signature' | 'save_firestore' | 'send_email' | 'complete' = 'prepare';
+        let currentStage: 'prepare' | 'generate_pdf' | 'upload_pdf' | 'get_pdf_url' | 'upload_signature' | 'save_firestore' | 'send_email' | 'complete' = 'prepare';
         let progress = 0;
         let signatureDocId: string | undefined;
+        let pdfBlobSize: number | undefined;
+        let pdfBlobType = '未提供';
+        let pdfStoragePath = '';
 
         try {
             // 1. Get Signature Image
@@ -147,6 +150,8 @@ const SignatureForm: React.FC = () => {
 
             pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
             const pdfBlob = pdf.output('blob');
+            pdfBlobSize = pdfBlob.size;
+            pdfBlobType = pdfBlob.type || '未提供';
             if (pdfBlob.size >= MAX_CONSENT_PDF_BYTES) {
                 throw new Error(`PDF 檔案過大（${(pdfBlob.size / 1024 / 1024).toFixed(1)} MB）`);
             }
@@ -156,9 +161,12 @@ const SignatureForm: React.FC = () => {
             progress = 40;
             const timestamp = Date.now();
             const pdfFileName = `${safeStorageName(formData.city)}_${safeStorageName(formData.school)}_${safeStorageName(formData.studentName)}_${timestamp}.pdf`;
-            const storageRef = ref(storage, `consents/${pdfFileName}`);
+            pdfStoragePath = `consents/${pdfFileName}`;
+            const storageRef = ref(storage, pdfStoragePath);
 
             await uploadBytes(storageRef, pdfBlob, { contentType: 'application/pdf' });
+            currentStage = 'get_pdf_url';
+            progress = 50;
             const pdfDownloadURL = await getDownloadURL(storageRef);
             setDownloadUrl(pdfDownloadURL);
 
@@ -223,11 +231,28 @@ const SignatureForm: React.FC = () => {
             setSubmitted(true);
             triggerConfetti();
         } catch (error) {
-            console.error("Error submitting form: ", error);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorCode = typeof error === 'object' && error !== null && 'code' in error
+                ? String((error as { code?: unknown }).code ?? '')
+                : '';
+            const isPdfStorageStage = currentStage === 'upload_pdf' || currentStage === 'get_pdf_url';
+            const pdfDiagnostics = isPdfStorageStage
+                ? `；PDF大小：${pdfBlobSize === undefined ? '未取得' : `${(pdfBlobSize / 1024 / 1024).toFixed(2)} MB`}；Blob MIME：${pdfBlobType}；上傳 MIME：application/pdf；路徑：${pdfStoragePath || '尚未建立'}`
+                : '';
+            const detailedErrorMessage = `${errorMessage}${errorCode ? `（Firebase code: ${errorCode}）` : ''}${pdfDiagnostics}`;
+            console.error('Error submitting form:', {
+                error,
+                stage: currentStage,
+                progress,
+                pdfBlobSize,
+                pdfBlobType,
+                pdfStoragePath,
+                errorCode,
+            });
             notifySignatureFailure({
                 stage: currentStage,
                 progress,
-                message: error instanceof Error ? error.message : String(error),
+                message: detailedErrorMessage,
                 context: 'SignatureForm.handleSubmit',
                 recordId: signatureDocId,
             });
