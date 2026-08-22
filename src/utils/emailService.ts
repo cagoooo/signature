@@ -1,10 +1,10 @@
 import emailjs from '@emailjs/browser';
 
-// TODO: Replace with your actual EmailJS credentials
-// Get these from https://dashboard.emailjs.com/
-const SERVICE_ID = 'service_3hfwepf';
-const TEMPLATE_ID = 'template_0jctoxk';
-const PUBLIC_KEY = 'MIaTcBPK7lAoUj5Aj';
+// EmailJS settings for the current account/service.
+// Keep only public identifiers in the frontend; Gmail OAuth stays in EmailJS.
+const SERVICE_ID = 'smes';
+const TEMPLATE_ID = 'template_8xr6zqj';
+const PUBLIC_KEY = 'lQDG7DY-hliwBDdX_';
 
 interface EmailData {
     to_email: string;
