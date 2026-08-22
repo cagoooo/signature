@@ -46,32 +46,32 @@ function Home() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5, duration: 0.8 }}
-          className="relative z-10 mt-16 mb-8 flex justify-center"
+          className="relative z-10 mt-12 mb-6 flex justify-center"
           aria-label="網站頁尾"
         >
-          <div className="w-full max-w-3xl rounded-3xl bg-gradient-to-r from-vibrant-blue via-vibrant-purple to-vibrant-pink p-[2px] shadow-xl shadow-vibrant-purple/15 transition-shadow duration-300 hover:shadow-vibrant-purple/30">
-            <div className="rounded-[calc(1.5rem-2px)] bg-white/90 px-5 py-5 backdrop-blur-xl sm:px-7">
-              <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:justify-between sm:text-left">
+          <div className="w-full max-w-2xl rounded-3xl bg-gradient-to-r from-vibrant-blue via-vibrant-purple to-vibrant-pink p-[2px] shadow-xl shadow-vibrant-purple/15 transition-shadow duration-300 hover:shadow-vibrant-purple/30">
+            <div className="rounded-[calc(1.5rem-2px)] bg-white/90 px-5 py-4 backdrop-blur-xl sm:px-6">
+              <div className="grid grid-cols-1 items-center gap-4 text-center sm:grid-cols-[1fr_auto_1fr] sm:gap-5 sm:text-left">
                 <div>
-                  <p className="text-xs font-extrabold tracking-[0.18em] text-vibrant-purple">
+                  <p className="text-sm font-extrabold tracking-[0.1em] text-vibrant-purple sm:text-base">
                     桃園市龍潭區石門國民小學
                   </p>
-                  <p className="mt-1 text-sm font-bold text-gray-700">
+                  <p className="mt-1 text-base font-bold leading-tight text-gray-800 sm:text-lg">
                     學生活動肖像使用授權同意書
                   </p>
                 </div>
 
-                <div className="h-px w-16 bg-gradient-to-r from-vibrant-blue/20 via-vibrant-purple/40 to-vibrant-pink/20 sm:h-12 sm:w-px" aria-hidden="true" />
+                <div className="h-px w-12 bg-gradient-to-r from-vibrant-blue/20 via-vibrant-purple/40 to-vibrant-pink/20 sm:h-12 sm:w-px" aria-hidden="true" />
 
-                <div className="text-sm text-gray-600 sm:text-right">
-                  <p className="font-bold text-gray-700">家長線上簽名系統</p>
-                  <p className="mt-1 text-xs text-gray-500">簽署完成後可下載 PDF 留存</p>
+                <div className="text-base leading-6 text-gray-600 sm:text-right">
+                  <p className="font-bold text-gray-800 sm:text-lg">家長線上簽名系統</p>
+                  <p className="mt-1 text-sm text-gray-600 sm:text-base">簽署完成後可下載 PDF 留存</p>
                 </div>
               </div>
 
-              <div className="mt-5 flex flex-col items-center justify-between gap-3 border-t border-gray-200/80 pt-4 text-xs font-medium text-gray-500 sm:flex-row">
-                <span>&copy; {currentYear} 石門國小</span>
-                <span className="flex items-center gap-1.5">
+              <div className="mt-4 flex flex-col items-center justify-between gap-2 border-t border-gray-200/80 pt-3 text-sm font-medium leading-6 text-gray-600 sm:flex-row">
+                <span className="font-semibold">&copy; {currentYear} 石門國小</span>
+                <span className="flex flex-wrap items-center justify-center gap-x-1.5">
                   Made with <span aria-label="愛心" className="text-base leading-none">❤️</span> by{' '}
                   <a
                     href={AUTHOR_PAGE_URL}
