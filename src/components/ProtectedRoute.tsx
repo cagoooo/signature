@@ -1,20 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { auth } from '../firebase';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
 import { Loader2 } from 'lucide-react';
+import { isAllowedAdminUser } from '../authPolicy';
 
 interface ProtectedRouteProps {
     children: React.ReactNode;
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-    const [user, setUser] = useState<any>(null);
+    const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-            setUser(currentUser);
+            if (isAllowedAdminUser(currentUser)) {
+                setUser(currentUser);
+            } else {
+                setUser(null);
+                if (currentUser) {
+                    void signOut(auth);
+                }
+            }
             setLoading(false);
         });
 

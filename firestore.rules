@@ -8,6 +8,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // 後台查詢僅開放指定學校帳號；前端限制不能取代這層伺服器規則。
+    function isAuthorizedAdmin() {
+      return isSignedIn()
+        && request.auth.token.email == 'ipad@mail2.smes.tyc.edu.tw';
+    }
+
     function isOwner(teacherUid) {
       return isSignedIn() && request.auth.uid == teacherUid;
     }
@@ -170,7 +176,7 @@ service cloud.firestore {
     // 家長不需登入即可新增；建立後不可修改，避免簽署紀錄被覆寫。
     match /signatures/{signatureId} {
       allow create: if isValidSignature(request.resource.data);
-      allow read, delete: if isSignedIn();
+      allow read, delete: if isAuthorizedAdmin();
       allow update: if false;
     }
 
