@@ -5,7 +5,7 @@ import { signOut } from 'firebase/auth';
 import { useNavigate, Link } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { downloadBatchPDFs } from '../utils/batchDownloader';
-import { Download, LogOut, Search, Filter, Loader2, FileText, Trash2, CheckSquare, Square, Home, User, Users, Calendar, PenTool, MapPin, School } from 'lucide-react';
+import { Download, LogOut, Search, Filter, Loader2, FileText, Trash2, CheckSquare, Square, Home, User, Users, Calendar, PenTool, MapPin, School, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface SignatureData {
@@ -24,6 +24,14 @@ interface SignatureData {
     isAgreed: boolean;
 }
 
+type SortKey = 'citySchool' | 'grade' | 'cls' | 'seat' | 'studentName' | 'parentName' | 'isAgreed' | 'timestamp';
+type SortDirection = 'asc' | 'desc';
+
+interface SortState {
+    key: SortKey;
+    direction: SortDirection;
+}
+
 const TAIWAN_CITIES = [
     "臺北市", "新北市", "基隆市", "桃園市", "新竹市", "新竹縣", "苗栗縣",
     "臺中市", "彰化縣", "南投縣", "雲林縣", "嘉義市", "嘉義縣", "臺南市",
@@ -38,6 +46,7 @@ const AdminDashboard: React.FC = () => {
     const [schoolFilter, setSchoolFilter] = useState('');
     const [gradeFilter, setGradeFilter] = useState('');
     const [classFilter, setClassFilter] = useState('');
+    const [sortState, setSortState] = useState<SortState>({ key: 'timestamp', direction: 'desc' });
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const navigate = useNavigate();
 
@@ -123,6 +132,13 @@ const AdminDashboard: React.FC = () => {
         }
     };
 
+    const handleSort = (key: SortKey) => {
+        setSortState(prev => ({
+            key,
+            direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
+        }));
+    };
+
     const exportToExcel = () => {
         const dataToExport = filteredSignatures.map(item => ({
             "縣市": item.city || '',
@@ -154,6 +170,40 @@ const AdminDashboard: React.FC = () => {
         const matchesGrade = gradeFilter ? item.grade === gradeFilter : true;
         const matchesClass = classFilter ? item.cls === classFilter : true;
         return matchesSearch && matchesCity && matchesSchool && matchesGrade && matchesClass;
+    }).sort((a, b) => {
+        const direction = sortState.direction === 'asc' ? 1 : -1;
+        let comparison = 0;
+
+        switch (sortState.key) {
+            case 'citySchool':
+                comparison = `${a.city || ''} ${a.school || ''}`.localeCompare(
+                    `${b.city || ''} ${b.school || ''}`,
+                    'zh-Hant-TW',
+                    { numeric: true, sensitivity: 'base' },
+                );
+                break;
+            case 'grade':
+            case 'cls':
+            case 'seat':
+                comparison = Number(a[sortState.key]) - Number(b[sortState.key]);
+                break;
+            case 'isAgreed':
+                comparison = Number(a.isAgreed) - Number(b.isAgreed);
+                break;
+            case 'timestamp':
+                comparison = (a.timestamp?.toMillis() || 0) - (b.timestamp?.toMillis() || 0);
+                break;
+            case 'studentName':
+            case 'parentName':
+                comparison = a[sortState.key].localeCompare(
+                    b[sortState.key],
+                    'zh-Hant-TW',
+                    { numeric: true, sensitivity: 'base' },
+                );
+                break;
+        }
+
+        return comparison * direction;
     });
 
     const grades = Array.from(new Set(signatures.map(s => s.grade))).sort();
@@ -319,14 +369,59 @@ const AdminDashboard: React.FC = () => {
                                                     {selectedIds.size === filteredSignatures.length && filteredSignatures.length > 0 ? <CheckSquare size={20} className="text-white" /> : <Square size={20} />}
                                                 </button>
                                             </th>
-                                            <th className="p-5 font-bold tracking-wide">縣市/學校</th>
-                                            <th className="p-5 font-bold tracking-wide">年級</th>
-                                            <th className="p-5 font-bold tracking-wide">班級</th>
-                                            <th className="p-5 font-bold tracking-wide">座號</th>
-                                            <th className="p-5 font-bold tracking-wide">學生姓名</th>
-                                            <th className="p-5 font-bold tracking-wide">家長姓名</th>
-                                            <th className="p-5 font-bold tracking-wide">簽署意願</th>
-                                            <th className="p-5 font-bold tracking-wide">簽署時間</th>
+                                            <th className="p-5 font-bold tracking-wide">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleSort('citySchool')}
+                                                    className="flex w-full items-center gap-2 text-left transition-colors hover:text-white/80"
+                                                    title="依縣市／學校排序"
+                                                >
+                                                    縣市/學校
+                                                    {sortState.key === 'citySchool' ? (sortState.direction === 'asc' ? <ArrowUp size={16} /> : <ArrowDown size={16} />) : <ArrowUpDown size={16} className="opacity-60" />}
+                                                </button>
+                                            </th>
+                                            <th className="p-5 font-bold tracking-wide">
+                                                <button type="button" onClick={() => handleSort('grade')} className="flex w-full items-center gap-2 transition-colors hover:text-white/80" title="依年級排序">
+                                                    年級
+                                                    {sortState.key === 'grade' ? (sortState.direction === 'asc' ? <ArrowUp size={16} /> : <ArrowDown size={16} />) : <ArrowUpDown size={16} className="opacity-60" />}
+                                                </button>
+                                            </th>
+                                            <th className="p-5 font-bold tracking-wide">
+                                                <button type="button" onClick={() => handleSort('cls')} className="flex w-full items-center gap-2 transition-colors hover:text-white/80" title="依班級排序">
+                                                    班級
+                                                    {sortState.key === 'cls' ? (sortState.direction === 'asc' ? <ArrowUp size={16} /> : <ArrowDown size={16} />) : <ArrowUpDown size={16} className="opacity-60" />}
+                                                </button>
+                                            </th>
+                                            <th className="p-5 font-bold tracking-wide">
+                                                <button type="button" onClick={() => handleSort('seat')} className="flex w-full items-center gap-2 transition-colors hover:text-white/80" title="依座號排序">
+                                                    座號
+                                                    {sortState.key === 'seat' ? (sortState.direction === 'asc' ? <ArrowUp size={16} /> : <ArrowDown size={16} />) : <ArrowUpDown size={16} className="opacity-60" />}
+                                                </button>
+                                            </th>
+                                            <th className="p-5 font-bold tracking-wide">
+                                                <button type="button" onClick={() => handleSort('studentName')} className="flex w-full items-center gap-2 transition-colors hover:text-white/80" title="依學生姓名排序">
+                                                    學生姓名
+                                                    {sortState.key === 'studentName' ? (sortState.direction === 'asc' ? <ArrowUp size={16} /> : <ArrowDown size={16} />) : <ArrowUpDown size={16} className="opacity-60" />}
+                                                </button>
+                                            </th>
+                                            <th className="p-5 font-bold tracking-wide">
+                                                <button type="button" onClick={() => handleSort('parentName')} className="flex w-full items-center gap-2 transition-colors hover:text-white/80" title="依家長姓名排序">
+                                                    家長姓名
+                                                    {sortState.key === 'parentName' ? (sortState.direction === 'asc' ? <ArrowUp size={16} /> : <ArrowDown size={16} />) : <ArrowUpDown size={16} className="opacity-60" />}
+                                                </button>
+                                            </th>
+                                            <th className="p-5 font-bold tracking-wide">
+                                                <button type="button" onClick={() => handleSort('isAgreed')} className="flex w-full items-center gap-2 transition-colors hover:text-white/80" title="依簽署意願排序">
+                                                    簽署意願
+                                                    {sortState.key === 'isAgreed' ? (sortState.direction === 'asc' ? <ArrowUp size={16} /> : <ArrowDown size={16} />) : <ArrowUpDown size={16} className="opacity-60" />}
+                                                </button>
+                                            </th>
+                                            <th className="p-5 font-bold tracking-wide">
+                                                <button type="button" onClick={() => handleSort('timestamp')} className="flex w-full items-center gap-2 transition-colors hover:text-white/80" title="依簽署時間排序">
+                                                    簽署時間
+                                                    {sortState.key === 'timestamp' ? (sortState.direction === 'asc' ? <ArrowUp size={16} /> : <ArrowDown size={16} />) : <ArrowUpDown size={16} className="opacity-60" />}
+                                                </button>
+                                            </th>
                                             <th className="p-5 font-bold tracking-wide">簽名預覽</th>
                                             <th className="p-5 font-bold tracking-wide text-right last:rounded-tr-2xl">操作</th>
                                         </tr>
