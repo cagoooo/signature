@@ -38,6 +38,12 @@ const TAIWAN_CITIES = [
     "高雄市", "屏東縣", "宜蘭縣", "花蓮縣", "臺東縣", "澎湖縣", "金門縣", "連江縣"
 ];
 
+const normalizeClass = (value?: string | number | null): string => {
+    const text = String(value ?? '').trim();
+    if (!/^\d+$/.test(text)) return text;
+    return text.replace(/^0+(?=\d)/, '');
+};
+
 const AdminDashboard: React.FC = () => {
     const [signatures, setSignatures] = useState<SignatureData[]>([]);
     const [loading, setLoading] = useState(true);
@@ -144,7 +150,7 @@ const AdminDashboard: React.FC = () => {
             "縣市": item.city || '',
             "學校": item.school || '',
             "年級": item.grade,
-            "班級": item.cls,
+            "班級": normalizeClass(item.cls),
             "座號": item.seat,
             "學生姓名": item.studentName,
             "家長姓名": item.parentName,
@@ -168,7 +174,7 @@ const AdminDashboard: React.FC = () => {
         const matchesCity = cityFilter ? item.city === cityFilter : true;
         const matchesSchool = schoolFilter ? (item.school && item.school.includes(schoolFilter)) : true;
         const matchesGrade = gradeFilter ? item.grade === gradeFilter : true;
-        const matchesClass = classFilter ? item.cls === classFilter : true;
+        const matchesClass = classFilter ? normalizeClass(item.cls) === classFilter : true;
         return matchesSearch && matchesCity && matchesSchool && matchesGrade && matchesClass;
     }).sort((a, b) => {
         const direction = sortState.direction === 'asc' ? 1 : -1;
@@ -207,7 +213,12 @@ const AdminDashboard: React.FC = () => {
     });
 
     const grades = Array.from(new Set(signatures.map(s => s.grade))).sort();
-    const classes = Array.from(new Set(signatures.map(s => s.cls))).sort();
+    const classes = Array.from(new Set(signatures.map(s => normalizeClass(s.cls)))).sort((a, b) => {
+        const numericDifference = Number(a) - Number(b);
+        return Number.isNaN(numericDifference)
+            ? a.localeCompare(b, 'zh-Hant-TW', { numeric: true, sensitivity: 'base' })
+            : numericDifference;
+    });
 
     return (
         <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans relative overflow-hidden">
@@ -454,7 +465,7 @@ const AdminDashboard: React.FC = () => {
                                                     </td>
                                                     <td className="p-5">
                                                         <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm font-bold shadow-sm border border-purple-200">
-                                                            {item.cls}
+                                                            {normalizeClass(item.cls)}
                                                         </span>
                                                     </td>
                                                     <td className="p-5">
@@ -563,7 +574,7 @@ const AdminDashboard: React.FC = () => {
                                                                 <User size={10} /> {item.grade}年
                                                             </span>
                                                             <span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded-md text-xs font-bold border border-purple-100 flex items-center gap-1">
-                                                                <Users size={10} /> {item.cls}班
+                                                                <Users size={10} /> {normalizeClass(item.cls)}班
                                                             </span>
                                                             <span className={`${item.isAgreed ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'} px-2 py-0.5 rounded-md text-xs font-bold border flex items-center gap-1`}>
                                                                 {item.isAgreed ? '同意' : '不同意'}
