@@ -53,6 +53,13 @@ function buildVersionPlugin(buildInfo: ReturnType<typeof createBuildVersion>): P
         `${JSON.stringify({ ...buildInfo, notes: '網站版本自動更新' }, null, 2)}\n`,
         'utf8',
       );
+      // GitHub Pages 不會替 BrowserRouter 做 history fallback；複製已完成資產
+      // 的 index.html，讓直接開啟 /signature/admin/login 時仍能由 React Router 接手。
+      writeFileSync(
+        resolve(outputDirectory, '404.html'),
+        readFileSync(resolve(outputDirectory, 'index.html'), 'utf8'),
+        'utf8',
+      );
       console.log(`✓ 版本已注入：${buildInfo.version}`);
     },
   };
