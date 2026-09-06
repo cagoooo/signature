@@ -1,5 +1,7 @@
 # 學生活動肖像使用授權同意書 - 線上簽名系統 (React + Firebase)
 
+🌐 **線上使用：[學生肖像使用授權同意書線上簽名](https://cagoooo.github.io/signature/)**
+
 這是一個現代化的線上簽名系統，專為學校設計，讓家長能透過手機或電腦輕鬆完成電子簽名。系統採用 React 前端搭配 Firebase 後端，提供高效、安全且響應式的使用體驗。
 
 ## ✨ 功能特色
@@ -105,7 +107,7 @@ Designed with ❤️ for Education.
 - Repository：`cagoooo/signature`
 - 可見性：公開
 - 主要技術：TypeScript、React、Vite、Firebase、Tailwind CSS
-- 線上入口：未在 GitHub repository metadata 設定
+- 線上入口：<https://cagoooo.github.io/signature/>
 
 ### 可以怎麼應用
 
