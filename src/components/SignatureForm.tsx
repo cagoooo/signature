@@ -133,10 +133,10 @@ const SignatureForm: React.FC = () => {
         }
 
         if (normalizedFormData.email.toLowerCase().endsWith('@gmail.co')) {
-            const confirmed = window.confirm(
-                '您填寫的信箱網域是 gmail.co；這次退信顯示該網域沒有收信紀錄。若原本要使用 Gmail，請確認是否應為 gmail.com。確認地址正確後才繼續送出。',
+            alert(
+                '這個 gmail.co 網域沒有收信紀錄，無法寄送備份。請修正電子郵件地址後再送出；資料尚未保存。若原本要使用 Gmail，請確認是否應為 gmail.com。',
             );
-            if (!confirmed) return;
+            return;
         }
 
         if (!formData.isAgreed) {
