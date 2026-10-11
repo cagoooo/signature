@@ -94,6 +94,51 @@ const SignatureForm: React.FC = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
+        const normalizedFormData: FormData = {
+            ...formData,
+            city: formData.city.trim(),
+            school: formData.school.trim(),
+            grade: formData.grade.trim(),
+            cls: formData.cls.trim(),
+            seat: formData.seat.trim(),
+            studentName: formData.studentName.trim(),
+            parentName: formData.parentName.trim(),
+            email: formData.email.trim(),
+        };
+
+        const missingFields = [
+            ['縣市', normalizedFormData.city],
+            ['學校', normalizedFormData.school],
+            ['年級', normalizedFormData.grade],
+            ['班級', normalizedFormData.cls],
+            ['座號', normalizedFormData.seat],
+            ['學生姓名', normalizedFormData.studentName],
+            ['家長姓名', normalizedFormData.parentName],
+            ['電子郵件', normalizedFormData.email],
+        ].filter(([, value]) => !value).map(([label]) => label);
+
+        if (missingFields.length) {
+            alert(`請確認以下欄位已填寫：${missingFields.join('、')}`);
+            return;
+        }
+
+        if (!/^\d+$/.test(normalizedFormData.grade) || !/^\d+$/.test(normalizedFormData.seat)) {
+            alert('年級與座號請填寫數字。');
+            return;
+        }
+
+        if (normalizedFormData.cls.length > 20) {
+            alert('班級欄位最多 20 個字，請縮短後再送出。');
+            return;
+        }
+
+        if (normalizedFormData.email.toLowerCase().endsWith('@gmail.co')) {
+            const confirmed = window.confirm(
+                '您填寫的信箱網域是 gmail.co；這次退信顯示該網域沒有收信紀錄。若原本要使用 Gmail，請確認是否應為 gmail.com。確認地址正確後才繼續送出。',
+            );
+            if (!confirmed) return;
+        }
+
         if (!formData.isAgreed) {
             alert('請選擇是否同意授權！');
             return;
@@ -104,6 +149,7 @@ const SignatureForm: React.FC = () => {
             return;
         }
 
+        setFormData(normalizedFormData);
         setLoading(true);
         setSubmissionWarning(null);
 
@@ -160,7 +206,7 @@ const SignatureForm: React.FC = () => {
             currentStage = 'upload_pdf';
             progress = 40;
             const timestamp = Date.now();
-            const pdfFileName = `${safeStorageName(formData.city)}_${safeStorageName(formData.school)}_${safeStorageName(formData.studentName)}_${timestamp}.pdf`;
+            const pdfFileName = `${safeStorageName(normalizedFormData.city)}_${safeStorageName(normalizedFormData.school)}_${safeStorageName(normalizedFormData.studentName)}_${timestamp}.pdf`;
             pdfStoragePath = `consents/${pdfFileName}`;
             const storageRef = ref(storage, pdfStoragePath);
 
@@ -177,7 +223,7 @@ const SignatureForm: React.FC = () => {
             progress = 60;
             const sigBlob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
             if (!sigBlob) throw new Error('簽名圖檔產生失敗');
-            const sigFileName = `sig_${safeStorageName(formData.city)}_${safeStorageName(formData.school)}_${safeStorageName(formData.studentName)}_${timestamp}.png`;
+            const sigFileName = `sig_${safeStorageName(normalizedFormData.city)}_${safeStorageName(normalizedFormData.school)}_${safeStorageName(normalizedFormData.studentName)}_${timestamp}.png`;
             const sigRef = ref(storage, `signatures/${sigFileName}`);
             await uploadBytes(sigRef, sigBlob, { contentType: 'image/png' });
             const sigDownloadURL = await getDownloadURL(sigRef);
@@ -186,10 +232,10 @@ const SignatureForm: React.FC = () => {
             currentStage = 'save_firestore';
             progress = 80;
             const signatureDoc = await addDoc(collection(db, "signatures"), {
-                ...formData,
+                ...normalizedFormData,
                 signatureUrl: sigDownloadURL,
                 pdfUrl: pdfDownloadURL,
-                isAgreed: formData.isAgreed === 'yes', // Store as boolean for easier filtering
+                isAgreed: normalizedFormData.isAgreed === 'yes', // Store as boolean for easier filtering
                 timestamp: serverTimestamp(),
                 userAgent: navigator.userAgent
             });
@@ -200,18 +246,18 @@ const SignatureForm: React.FC = () => {
             progress = 90;
             if (formData.email) {
                 const emailResult = await sendConsentEmail({
-                    to_email: formData.email,
-                    to_name: formData.parentName,
-                    city: formData.city,
-                    school: formData.school,
-                    student_name: formData.studentName,
-                    grade: formData.grade,
-                    cls: formData.cls,
-                    seat: formData.seat,
+                    to_email: normalizedFormData.email,
+                    to_name: normalizedFormData.parentName,
+                    city: normalizedFormData.city,
+                    school: normalizedFormData.school,
+                    student_name: normalizedFormData.studentName,
+                    grade: normalizedFormData.grade,
+                    cls: normalizedFormData.cls,
+                    seat: normalizedFormData.seat,
                     signature_url: pdfDownloadURL,
                     timestamp: new Date().toLocaleString('zh-TW'),
                     pdf_link: pdfDownloadURL,
-                    is_agreed_text: formData.isAgreed === 'yes' ? '【同意】' : '【不同意】'
+                    is_agreed_text: normalizedFormData.isAgreed === 'yes' ? '【同意】' : '【不同意】'
                 });
                 if (emailResult.status !== 'success') {
                     const message = `Email 通知寄送失敗：${emailResult.message}`;
@@ -417,8 +463,9 @@ const SignatureForm: React.FC = () => {
                         onChange={handleChange}
                     />
                     <InputField
-                        label="班級" name="cls" type="text" placeholder="2"
+                        label="班級" name="cls" type="text" placeholder="例如：2、甲"
                         icon={<Users size={18} />} color="blue"
+                        maxLength={20}
                         onChange={handleChange}
                     />
                     <InputField
@@ -627,7 +674,7 @@ const SignatureForm: React.FC = () => {
 };
 
 // Reusable Input Component with Colorful Styles
-const InputField = ({ label, name, type, placeholder, icon, color, onChange }: any) => {
+const InputField = ({ label, name, type, placeholder, icon, color, onChange, maxLength }: any) => {
     const colorClasses: any = {
         blue: "focus:ring-vibrant-blue focus:border-vibrant-blue text-vibrant-blue",
         pink: "focus:ring-vibrant-pink focus:border-vibrant-pink text-vibrant-pink",
@@ -656,6 +703,7 @@ const InputField = ({ label, name, type, placeholder, icon, color, onChange }: a
                     name={name}
                     required
                     placeholder={placeholder}
+                    maxLength={maxLength}
                     className={`w-full pl-12 pr-4 py-3.5 bg-gray-50/50 border-2 border-gray-100 rounded-2xl focus:ring-4 focus:ring-opacity-20 outline-none transition-all placeholder-gray-300 text-gray-700 font-bold ${colorClasses[color]}`}
                     onChange={onChange}
                 />

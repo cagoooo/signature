@@ -47,7 +47,8 @@ service cloud.firestore {
         data.studentName is string && data.studentName.size() > 0 &&
         data.parentName is string && data.parentName.size() > 0 &&
         data.grade is string && data.grade.matches('^[0-9]+$') &&
-        data.cls is string && data.cls.matches('^[0-9]+$') &&
+        // 表單允許班級輸入文字（例如「甲」），與年級、座號不同；限制長度避免任意大型值。
+        data.cls is string && data.cls.size() > 0 && data.cls.size() <= 20 &&
         data.seat is string && data.seat.matches('^[0-9]+$') &&
         data.signatureUrl is string &&
         data.pdfUrl is string &&
