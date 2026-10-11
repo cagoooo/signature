@@ -25,15 +25,28 @@ export type ConsentEmailResult =
     | { status: 'success'; response: unknown }
     | { status: 'error'; error: unknown; message: string };
 
-const describeEmailError = (error: unknown) => {
-    if (typeof error === 'object' && error !== null) {
-        const candidate = error as { status?: unknown; text?: unknown };
-        const status = typeof candidate.status === 'number' ? `HTTP ${candidate.status}` : '';
-        const text = typeof candidate.text === 'string' ? candidate.text.trim() : '';
-        return [status, text].filter(Boolean).join(': ') || 'EmailJS 未提供錯誤訊息';
+const describeEmailError = (error: unknown): string => {
+    const fallback = 'EmailJS 未提供錯誤訊息';
+    const limit = (value: string) => value.trim().slice(0, 500);
+
+    if (typeof error === 'string') return limit(error) || fallback;
+
+    if (error instanceof Error) {
+        const message = limit(error.message);
+        const name = error.name && error.name !== 'Error' ? `${error.name}: ` : '';
+        return `${name}${message}`.slice(0, 500) || fallback;
     }
 
-    return String(error || 'EmailJS 未提供錯誤訊息');
+    if (typeof error === 'object' && error !== null) {
+        const candidate = error as { status?: unknown; text?: unknown; message?: unknown; name?: unknown };
+        const status = typeof candidate.status === 'number' ? `HTTP ${candidate.status}` : '';
+        const text = typeof candidate.text === 'string' ? limit(candidate.text) : '';
+        const message = typeof candidate.message === 'string' ? limit(candidate.message) : '';
+        const name = typeof candidate.name === 'string' ? limit(candidate.name) : '';
+        return [status, text || message || name].filter(Boolean).join(': ').slice(0, 500) || fallback;
+    }
+
+    return String(error ?? fallback).slice(0, 500);
 };
 
 export const sendConsentEmail = async (data: EmailData): Promise<ConsentEmailResult> => {
