@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { db, auth } from '../firebase';
 import { collection, getDocs, query, orderBy, Timestamp, deleteDoc, doc, writeBatch } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { useNavigate, Link } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { downloadBatchPDFs } from '../utils/batchDownloader';
+import { downloadClassConsentPackage, getConsentStatus } from '../utils/classConsentPackage';
 import { Download, LogOut, Search, Filter, Loader2, FileText, Trash2, CheckSquare, Square, Home, User, Users, Calendar, PenTool, MapPin, School, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -21,7 +22,7 @@ interface SignatureData {
     timestamp: Timestamp;
     email?: string;
     pdfUrl?: string;
-    isAgreed: boolean;
+    isAgreed?: boolean | null;
 }
 
 type SortKey = 'citySchool' | 'grade' | 'cls' | 'seat' | 'studentName' | 'parentName' | 'isAgreed' | 'timestamp';
@@ -54,6 +55,9 @@ const AdminDashboard: React.FC = () => {
     const [classFilter, setClassFilter] = useState('');
     const [sortState, setSortState] = useState<SortState>({ key: 'timestamp', direction: 'desc' });
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [isPackaging, setIsPackaging] = useState(false);
+    const [packageMessage, setPackageMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const packagingLock = useRef(false);
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -154,10 +158,11 @@ const AdminDashboard: React.FC = () => {
             "座號": item.seat,
             "學生姓名": item.studentName,
             "家長姓名": item.parentName,
-            "簽署意願": item.isAgreed ? "同意" : "不同意",
+            "簽署意願": getConsentStatus(item.isAgreed),
             "家長Email": item.email || '',
             "簽署時間": item.timestamp?.toDate().toLocaleString(),
-            "簽名檔連結": item.signatureUrl
+            "簽名檔連結": item.signatureUrl,
+            "同意書PDF連結": item.pdfUrl || ''
         }));
 
         const ws = XLSX.utils.json_to_sheet(dataToExport);
@@ -194,7 +199,7 @@ const AdminDashboard: React.FC = () => {
                 comparison = Number(a[sortState.key]) - Number(b[sortState.key]);
                 break;
             case 'isAgreed':
-                comparison = Number(a.isAgreed) - Number(b.isAgreed);
+                comparison = (a.isAgreed === true ? 1 : a.isAgreed === false ? 0 : -1) - (b.isAgreed === true ? 1 : b.isAgreed === false ? 0 : -1);
                 break;
             case 'timestamp':
                 comparison = (a.timestamp?.toMillis() || 0) - (b.timestamp?.toMillis() || 0);
@@ -211,6 +216,35 @@ const AdminDashboard: React.FC = () => {
 
         return comparison * direction;
     });
+
+    const consentCounts = filteredSignatures.reduce((counts, item) => {
+        if (item.isAgreed === true) counts.agreed += 1;
+        else if (item.isAgreed === false) counts.disagreed += 1;
+        else counts.unknown += 1;
+        return counts;
+    }, { agreed: 0, disagreed: 0, unknown: 0 });
+
+    const handlePackageDownload = async () => {
+        if (loading || filteredSignatures.length === 0 || packagingLock.current) return;
+        packagingLock.current = true;
+        setIsPackaging(true);
+        setPackageMessage(null);
+        try {
+            await downloadClassConsentPackage(filteredSignatures, {
+                searchTerm, cityFilter, schoolFilter, gradeFilter, classFilter,
+            });
+            setPackageMessage({
+                type: 'success',
+                text: 'ZIP 下載已開始，內含各班資料夾與同意、不同意、意願未記錄的詳細名單。',
+            });
+        } catch (error) {
+            console.error('班級名單打包失敗：', error);
+            setPackageMessage({ type: 'error', text: '班級名單打包失敗，請稍後重試。' });
+        } finally {
+            packagingLock.current = false;
+            setIsPackaging(false);
+        }
+    };
 
     const grades = Array.from(new Set(signatures.map(s => s.grade))).sort();
     const classes = Array.from(new Set(signatures.map(s => normalizeClass(s.cls)))).sort((a, b) => {
@@ -287,6 +321,17 @@ const AdminDashboard: React.FC = () => {
                             </button>
 
                             <button
+                                type="button"
+                                onClick={handlePackageDownload}
+                                disabled={loading || filteredSignatures.length === 0 || isPackaging}
+                                aria-busy={isPackaging}
+                                className="bg-vibrant-blue hover:bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg transition-all flex items-center gap-2 disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none disabled:cursor-not-allowed"
+                            >
+                                {isPackaging ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+                                {isPackaging ? '正在整理各班名單...' : '一鍵打包各班名單'}
+                            </button>
+
+                            <button
                                 onClick={handleLogout}
                                 className="bg-gradient-to-r from-rose-400 to-red-500 hover:from-rose-500 hover:to-red-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-rose-500/30 hover:shadow-rose-500/40 transition-all flex items-center gap-2 transform hover:-translate-y-0.5"
                             >
@@ -359,6 +404,21 @@ const AdminDashboard: React.FC = () => {
                             {classes.map(c => <option key={c} value={c}>{c} 班</option>)}
                         </select>
                     </div>
+                </div>
+
+                <div className="mb-6 bg-white/90 rounded-2xl p-4 border border-blue-100 text-sm text-gray-600 space-y-2">
+                    <p className="font-bold text-gray-800">
+                        目前篩選：{filteredSignatures.length} 筆｜同意 {consentCounts.agreed} 筆｜不同意 {consentCounts.disagreed} 筆｜意願未記錄 {consentCounts.unknown} 筆
+                    </p>
+                    <p>本次打包包含目前篩選的全部資料，不受勾選影響；僅含已送出簽署，無法判定未回覆學生。</p>
+                    {packageMessage && (
+                        <p
+                            role={packageMessage.type === 'error' ? 'alert' : 'status'}
+                            className={packageMessage.type === 'error' ? 'font-medium text-red-700' : 'font-medium text-green-700'}
+                        >
+                            {packageMessage.text}
+                        </p>
+                    )}
                 </div>
 
                 {/* Data Display */}
@@ -476,8 +536,8 @@ const AdminDashboard: React.FC = () => {
                                                     <td className="p-5 font-bold text-gray-800 text-lg">{item.studentName}</td>
                                                     <td className="p-5 text-gray-600 font-medium">{item.parentName}</td>
                                                     <td className="p-5">
-                                                        <span className={`px-3 py-1 rounded-full text-sm font-bold shadow-sm border ${item.isAgreed ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-700 border-red-200'}`}>
-                                                            {item.isAgreed ? '同意' : '不同意'}
+                                                        <span className={`px-3 py-1 rounded-full text-sm font-bold shadow-sm border ${item.isAgreed === true ? 'bg-green-100 text-green-700 border-green-200' : item.isAgreed === false ? 'bg-red-100 text-red-700 border-red-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                                                            {getConsentStatus(item.isAgreed)}
                                                         </span>
                                                     </td>
                                                     <td className="p-5 text-gray-500 text-sm font-mono">
@@ -576,8 +636,8 @@ const AdminDashboard: React.FC = () => {
                                                             <span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded-md text-xs font-bold border border-purple-100 flex items-center gap-1">
                                                                 <Users size={10} /> {normalizeClass(item.cls)}班
                                                             </span>
-                                                            <span className={`${item.isAgreed ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'} px-2 py-0.5 rounded-md text-xs font-bold border flex items-center gap-1`}>
-                                                                {item.isAgreed ? '同意' : '不同意'}
+                                                            <span className={`${item.isAgreed === true ? 'bg-green-50 text-green-700 border-green-100' : item.isAgreed === false ? 'bg-red-50 text-red-700 border-red-100' : 'bg-gray-50 text-gray-600 border-gray-100'} px-2 py-0.5 rounded-md text-xs font-bold border flex items-center gap-1`}>
+                                                                {getConsentStatus(item.isAgreed)}
                                                             </span>
                                                         </div>
                                                     </div>
