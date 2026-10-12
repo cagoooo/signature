@@ -70,6 +70,18 @@ npm run build
 npm run deploy
 ```
 
+### 完整發布與正式站查核
+
+完成原始碼的 commit 與 push 後，使用以下指令接續正式發布及驗證：
+
+```bash
+npm run release
+```
+
+這會沿用現有流程重新建置、發布至 `gh-pages`，再等待對應的 GitHub Pages 建置成功。查核會比對正式 `version.json`、首頁實際載入的主程式及其 SHA-256，確認線上檔案與本次 `dist` 一致，並確認班級打包功能已包含在正式主程式中；任何一項未通過會回傳失敗，避免把單純推送成功當成上線完成。
+
+若只需重新查核既有發布，可執行 `npm run verify:release`。查核只有讀取公開靜態檔案及 GitHub 建置狀態，不會登入後台或讀取學生資料；登入後操作、實際家長通知及實體手機測試須分別確認。
+
 ### 4. 建置正式版
 ```bash
 npm run build
