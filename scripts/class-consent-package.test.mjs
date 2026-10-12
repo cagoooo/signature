@@ -42,7 +42,7 @@ try {
     await build({ entryPoints: [join(root, 'src/utils/classConsentPackage.ts')],
         bundle: true, platform: 'node', format: 'cjs',
         outfile: join(temporary, 'package.cjs'), logLevel: 'silent' });
-    const { buildClassConsentPackage, getConsentStatus } =
+    const { buildClassConsentPackage, getConsentStatus, normalizeConsentGrouping } =
         (await import(pathToFileURL(join(temporary, 'package.cjs')).href)).default;
     const filters = { searchTerm: '', cityFilter: '', schoolFilter: '', gradeFilter: '', classFilter: '' };
     const detailRows = (pack) => rows(pack.workbooks.get('班級總覽.xlsx'), '全部明細');
@@ -146,17 +146,108 @@ try {
     await verify('空篩選結果明確拒絕打包', async () => {
         await assert.rejects(buildClassConsentPackage([], filters), /沒有簽署資料/);
     });
+    await verify('已知石門校名與可核對年班合併，外縣同名學校保持分開', async () => {
+        const aliases = [
+            fixture('alias1', { school: '石門國小', grade: '01', cls: '04', seat: '０１' }),
+            fixture('alias2', { city: '桃園縣', school: '龍潭區石門國小', grade: '一年級', cls: '一 年 四 班', seat: '二號', isAgreed: false }),
+            fixture('alias3', { school: '桃園市龍潭區石門國民小學', grade: '1', cls: '四班', seat: '十一', isAgreed: undefined }),
+            fixture('otherCity', { city: '台北市', school: '石門國小', grade: '1', cls: '4', seat: '1' }),
+        ];
+        const aliasPack = await inspectPackage(await buildClassConsentPackage(aliases, filters));
+        assert.equal(classBooks(aliasPack).length, 2);
+        const targetRows = detailRows(aliasPack).filter(row => row['縣市'] === '桃園市');
+        assert.equal(targetRows.length, 3);
+        for (const row of targetRows) {
+            assert.equal(row['學校'], '石門國小'); assert.equal(row['年級'], '1'); assert.equal(row['班級'], '4');
+        }
+        assert.deepEqual(targetRows.map(row => row['座號']), ['1', '2', '11']);
+        assert.equal(detailRows(aliasPack).find(row => row['紀錄 ID'] === 'otherCity')['縣市'], '臺北市');
+        assert.deepEqual(new Set(detailRows(aliasPack).map(row => row['紀錄 ID'])), new Set(aliases.map(record => record.id)));
+        assert.deepEqual(targetRows.map(row => row['簽署意願']), ['同意', '不同意', '意願未記錄']);
+        for (const original of aliases) {
+            const row = detailRows(aliasPack).find(item => item['紀錄 ID'] === original.id);
+            for (const [column, property] of [['縣市', 'city'], ['學校', 'school'], ['年級', 'grade'], ['班級', 'cls'], ['座號', 'seat']]) {
+                assert.equal(row[`原始${column}`], original[property]);
+            }
+            assert.equal(row['學生姓名'], original.studentName); assert.equal(row['家長姓名'], original.parentName);
+            assert.equal(row['簽署時間（臺灣）'], '2026-10-01 10:30:00');
+            assert.ok(row['歸類說明']);
+        }
+    });
+    await verify('矛盾年班與不明縣市列入待確認，不混入可靠班級', async () => {
+        const uncertain = [
+            fixture('known', { school: '石門國小', grade: '1', cls: '4' }),
+            fixture('conflict', { school: '石門國小', grade: '2', cls: '1年4班', isAgreed: false }),
+            fixture('missingCity', { city: '', school: '石門國小', grade: '1', cls: '4', isAgreed: null }),
+            fixture('conflictCity', { city: '臺北市', school: '桃園市龍潭區石門國小', grade: '1', cls: '4' }),
+        ];
+        const uncertainPack = await inspectPackage(await buildClassConsentPackage(uncertain, filters));
+        assert.equal(classBooks(uncertainPack).length, 4);
+        const pending = rows(uncertainPack.workbooks.get('班級總覽.xlsx'), '待確認歸類');
+        assert.deepEqual(new Set(pending.map(row => row['紀錄 ID'])), new Set(['conflict', 'missingCity', 'conflictCity']));
+        const classConflict = detailRows(uncertainPack).find(row => row['紀錄 ID'] === 'conflict');
+        assert.equal(classConflict['年級'], '2'); assert.equal(classConflict['班級'], '1年4班');
+        assert.equal(classConflict['簽署意願'], '不同意');
+        assert.equal(normalizeConsentGrouping(uncertain[2]).city, '');
+        assert.equal(detailRows(uncertainPack).length, uncertain.length);
+    });
+    await verify('命名班保留，104不猜成年班；明確完整年班可補缺漏年級', () => {
+        const named = normalizeConsentGrouping(fixture('named', { grade: '1', cls: '忠班' }));
+        assert.equal(named.cls, '忠'); assert.equal(named.needsReview, false);
+        const ambiguous = normalizeConsentGrouping(fixture('ambiguous', { grade: '1', cls: '104' }));
+        assert.equal(ambiguous.grade, '1'); assert.equal(ambiguous.cls, '104');
+        const explicit = normalizeConsentGrouping(fixture('explicit', { grade: '', cls: '1年4班' }));
+        assert.equal(explicit.grade, '1'); assert.equal(explicit.cls, '4'); assert.equal(explicit.needsReview, false);
+    });
+    await verify('分隔數字、零年班與不確定中文數字保守保留並提示核對', () => {
+        for (const cls of ['1/2', '1-2', '1.2', '一百二', '一千二']) {
+            const result = normalizeConsentGrouping(fixture('unsafe-number', { grade: '1', cls }));
+            assert.equal(result.cls, cls); assert.equal(result.needsReview, true);
+        }
+        assert.equal(normalizeConsentGrouping(fixture('zero-grade', { grade: '0', cls: '4' })).needsReview, true);
+        assert.equal(normalizeConsentGrouping(fixture('zero-class', { grade: '1', cls: '0' })).needsReview, true);
+        assert.equal(normalizeConsentGrouping(fixture('fraction-seat', { seat: '1/2' })).seat, '1/2');
+    });
+    await verify('原13個明細欄位維持順序，待確認分類也保留空表頭', async () => {
+        const single = await inspectPackage(await buildClassConsentPackage([fixture('single', { school: '石門國小', grade: '1', cls: '4' })], filters));
+        const book = single.workbooks.get('班級總覽.xlsx');
+        const headers = XLSX.utils.sheet_to_json(book.Sheets['全部明細'], { header: 1 })[0];
+        assert.deepEqual(headers.slice(0, 13), ['縣市', '學校', '年級', '班級', '座號', '學生姓名', '家長姓名',
+            '家長 Email', '簽署意願', '簽署時間（臺灣）', '簽名圖檔連結', 'PDF 連結', '紀錄 ID']);
+        for (const current of single.workbooks.values()) {
+            assert.equal(rows(current, '待確認歸類').length, 0);
+            assert.deepEqual(XLSX.utils.sheet_to_json(current.Sheets['待確認歸類'], { header: 1 })[0], headers);
+        }
+    });
+    await verify('明確命名班前後綴合併，重複班字列待確認並保留原值', async () => {
+        const names = ['甲', '甲班', '忠孝', '忠孝班', '4班班', '甲班班'];
+        const namedRecords = names.map((cls, index) => fixture(`named${index}`, { school: '石門國小', grade: '1', cls }));
+        const namedPack = await inspectPackage(await buildClassConsentPackage(namedRecords, filters));
+        assert.equal(classBooks(namedPack).length, 4);
+        const overview = rows(namedPack.workbooks.get('班級總覽.xlsx'), '班級總覽');
+        for (const cls of ['甲', '忠孝']) {
+            const group = overview.find(row => row['班級'] === cls);
+            assert.equal(group['全部簽署筆數'], 2);
+        }
+        const pending = rows(namedPack.workbooks.get('班級總覽.xlsx'), '待確認歸類');
+        assert.equal(pending.length, 2);
+        assert.deepEqual(new Set(pending.map(row => row['班級'])), new Set(['4班班', '甲班班']));
+        for (const original of namedRecords) {
+            const row = detailRows(namedPack).find(item => item['紀錄 ID'] === original.id);
+            assert.equal(row['原始班級'], original.cls);
+        }
+    });
 
     // 以真實元件與匯出函式操作瀏覽器，只替換 Firebase 資料來源及加入等待閘門。
     const uiFixtures = [
-        fixture('ui-agree', { studentName: '合成學生目標甲' }),
-        fixture('ui-disagree', { studentName: '合成學生目標乙', seat: '2', cls: '01', isAgreed: false }),
-        fixture('ui-unknown', { studentName: '合成學生目標丙', seat: '3', isAgreed: null }),
-        fixture('off-school', { school: '測試乙校', studentName: '合成學生目標丁' }),
-        fixture('off-grade', { grade: '5', studentName: '合成學生目標戊' }),
-        fixture('off-class', { cls: '2', studentName: '合成學生目標己' }),
-        fixture('off-city', { city: '臺北市', studentName: '合成學生目標庚' }),
-        fixture('off-search', { studentName: '合成其他學生' }),
+        fixture('ui-agree', { school: '石門國小', grade: '1', cls: '1年4班', studentName: '合成學生目標甲' }),
+        fixture('ui-disagree', { school: '龍潭區石門國小', grade: '一年級', cls: '０４', studentName: '合成學生目標乙', seat: '2', isAgreed: false }),
+        fixture('ui-unknown', { school: '桃園市龍潭區石門國民小學', grade: '01', cls: '四班', studentName: '合成學生目標丙', seat: '3', isAgreed: null }),
+        fixture('off-school', { school: '測試乙校', grade: '1', cls: '4', studentName: '合成學生目標丁' }),
+        fixture('off-grade', { school: '石門國小', grade: '2', cls: '4', studentName: '合成學生目標戊' }),
+        fixture('off-class', { school: '石門國小', grade: '1', cls: '5', studentName: '合成學生目標己' }),
+        fixture('off-city', { school: '石門國小', grade: '1', cls: '4', city: '臺北市', studentName: '合成學生目標庚' }),
+        fixture('off-search', { school: '石門國小', grade: '1', cls: '4', studentName: '合成其他學生' }),
     ];
     const utilityPath = join(root, 'src/utils/classConsentPackage.ts').replaceAll('\\', '/');
     const uiEntry = `import React from 'react';
@@ -176,8 +267,8 @@ try {
                 else if (path === 'firebase/auth') contents = 'export async function signOut() { throw new Error("不允許測試登出"); }';
                 else if (path === '../utils/batchDownloader') contents = 'export async function downloadBatchPDFs() { throw new Error("不允許測試其他下載"); }';
                 else if (path === '../utils/classConsentPackage') contents = `
-                    import {downloadClassConsentPackage as actual, getConsentStatus} from ${JSON.stringify(utilityPath)};
-                    export {getConsentStatus};
+                    import {downloadClassConsentPackage as actual, getConsentStatus, normalizeConsentGrouping, matchesSchoolSearch, matchesConsentSearch} from ${JSON.stringify(utilityPath)};
+                    export {getConsentStatus, normalizeConsentGrouping, matchesSchoolSearch, matchesConsentSearch};
                     export async function downloadClassConsentPackage(records, filters) {
                         window.__packageCalls = (window.__packageCalls || 0) + 1;
                         window.__lastPayload = {records, filters};
@@ -232,9 +323,9 @@ try {
         });
         await verify('縣市、學校、年級、班級及搜尋篩選得到三種意願的目標資料', async () => {
             await page.locator('select').nth(0).selectOption('桃園市');
-            await page.getByPlaceholder('學校名稱...').fill('測試甲校');
-            await page.locator('select').nth(1).selectOption('6');
-            await page.locator('select').nth(2).selectOption('1');
+            await page.getByPlaceholder('學校名稱...').fill('石門國小');
+            await page.locator('select').nth(1).selectOption('1');
+            await page.locator('select').nth(2).selectOption('4');
             await page.getByPlaceholder('搜尋...').fill('合成學生目標');
             await page.waitForFunction(() => document.body.textContent.includes('目前篩選：3 筆｜同意 1 筆｜不同意 1 筆｜意願未記錄 1 筆'));
             await page.locator('tbody tr').first().locator('td button').first().click();
@@ -256,7 +347,7 @@ try {
             const received = await page.evaluate(() => ({ ids: window.__lastPayload.records.map(record => record.id), filters: window.__lastPayload.filters, calls: window.__packageCalls }));
             assert.equal(received.calls, 1);
             assert.equal(received.ids.length, 3);
-            assert.deepEqual(received.filters, { searchTerm: '合成學生目標', cityFilter: '桃園市', schoolFilter: '測試甲校', gradeFilter: '6', classFilter: '1' });
+            assert.deepEqual(received.filters, { searchTerm: '合成學生目標', cityFilter: '桃園市', schoolFilter: '石門國小', gradeFilter: '1', classFilter: '4' });
             await page.getByRole('status').filter({ hasText: 'ZIP 下載已開始' }).waitFor();
             assert.equal(await packageButton().isEnabled(), true);
         });
@@ -314,7 +405,7 @@ try {
                     await page.setViewportSize({ width, height: captureHeight });
                     await page.waitForTimeout(500);
                     await page.screenshot({ path: join(process.env.CLASS_PACKAGE_SCREENSHOT_DIR,
-                        width === 1280 ? 'class-package-desktop.png' : 'class-package-mobile.png'), fullPage: true });
+                        `${process.env.CLASS_PACKAGE_SCREENSHOT_PREFIX || 'class-package'}-${width === 1280 ? 'desktop' : 'mobile'}.png`), fullPage: true });
                 }
             }
             assert.deepEqual(errors, [], '隔離 UI 不應出現執行錯誤');

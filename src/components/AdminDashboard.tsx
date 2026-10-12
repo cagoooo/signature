@@ -1,11 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { db, auth } from '../firebase';
 import { collection, getDocs, query, orderBy, Timestamp, deleteDoc, doc, writeBatch } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { useNavigate, Link } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { downloadBatchPDFs } from '../utils/batchDownloader';
-import { downloadClassConsentPackage, getConsentStatus } from '../utils/classConsentPackage';
+import { downloadClassConsentPackage, getConsentStatus, normalizeConsentGrouping, matchesSchoolSearch, matchesConsentSearch } from '../utils/classConsentPackage';
 import { Download, LogOut, Search, Filter, Loader2, FileText, Trash2, CheckSquare, Square, Home, User, Users, Calendar, PenTool, MapPin, School, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -39,10 +39,25 @@ const TAIWAN_CITIES = [
     "高雄市", "屏東縣", "宜蘭縣", "花蓮縣", "臺東縣", "澎湖縣", "金門縣", "連江縣"
 ];
 
-const normalizeClass = (value?: string | number | null): string => {
-    const text = String(value ?? '').trim();
-    if (!/^\d+$/.test(text)) return text;
-    return text.replace(/^0+(?=\d)/, '');
+const GroupingNote: React.FC<{ record: SignatureData; grouping: ReturnType<typeof normalizeConsentGrouping> }> = ({ record, grouping }) => {
+    const hasChanges = (['city', 'school', 'grade', 'cls', 'seat'] as const)
+        .some(key => grouping[key] !== String(record[key] ?? ''));
+    if (!hasChanges && !grouping.needsReview) return null;
+    return (
+        <div className="mt-1 text-xs leading-relaxed break-words">
+            {grouping.needsReview && (
+                <span title={grouping.notes.join('；')} className="inline-block bg-amber-50 text-amber-800 border border-amber-200 rounded-md px-2 py-0.5 font-bold">
+                    歸類待確認
+                </span>
+            )}
+            {hasChanges && (
+                <p className="text-gray-500 mt-1">
+                    已整理：原填 {record.city || '未填縣市'}／{record.school || '未填學校'}／{record.grade || '未填'} 年 {record.cls || '未填'} 班／座號 {record.seat || '未填'}
+                </p>
+            )}
+            {grouping.needsReview && <p className="text-amber-800 mt-1">{grouping.notes.join('；')}</p>}
+        </div>
+    );
 };
 
 const AdminDashboard: React.FC = () => {
@@ -59,6 +74,9 @@ const AdminDashboard: React.FC = () => {
     const [packageMessage, setPackageMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const packagingLock = useRef(false);
     const navigate = useNavigate();
+    const normalizedSignatures = useMemo(() => signatures.map(record => ({
+        record, grouping: normalizeConsentGrouping(record),
+    })), [signatures]);
 
     useEffect(() => {
         fetchSignatures();
@@ -150,19 +168,26 @@ const AdminDashboard: React.FC = () => {
     };
 
     const exportToExcel = () => {
-        const dataToExport = filteredSignatures.map(item => ({
-            "縣市": item.city || '',
-            "學校": item.school || '',
-            "年級": item.grade,
-            "班級": normalizeClass(item.cls),
-            "座號": item.seat,
+        const dataToExport = filteredRows.map(({ record: item, grouping }) => ({
+            "縣市": grouping.city,
+            "學校": grouping.school,
+            "年級": grouping.grade,
+            "班級": grouping.cls,
+            "座號": grouping.seat,
             "學生姓名": item.studentName,
             "家長姓名": item.parentName,
             "簽署意願": getConsentStatus(item.isAgreed),
             "家長Email": item.email || '',
             "簽署時間": item.timestamp?.toDate().toLocaleString(),
             "簽名檔連結": item.signatureUrl,
-            "同意書PDF連結": item.pdfUrl || ''
+            "同意書PDF連結": item.pdfUrl || '',
+            "原填縣市": item.city || '',
+            "原填學校": item.school || '',
+            "原填年級": item.grade,
+            "原填班級": item.cls,
+            "原填座號": item.seat,
+            "歸類狀態": grouping.needsReview ? '待確認' : '已整理',
+            "整理說明": grouping.notes.join('；')
         }));
 
         const ws = XLSX.utils.json_to_sheet(dataToExport);
@@ -171,24 +196,23 @@ const AdminDashboard: React.FC = () => {
         XLSX.writeFile(wb, `學生活動同意書簽署名單_${new Date().toISOString().split('T')[0]}.xlsx`);
     };
 
-    const filteredSignatures = signatures.filter(item => {
-        const matchesSearch = item.studentName.includes(searchTerm) ||
-            item.parentName.includes(searchTerm) ||
-            item.seat.includes(searchTerm) ||
-            (item.school && item.school.includes(searchTerm));
-        const matchesCity = cityFilter ? item.city === cityFilter : true;
-        const matchesSchool = schoolFilter ? (item.school && item.school.includes(schoolFilter)) : true;
-        const matchesGrade = gradeFilter ? item.grade === gradeFilter : true;
-        const matchesClass = classFilter ? normalizeClass(item.cls) === classFilter : true;
+    const filteredRows = normalizedSignatures.filter(({ record: item, grouping }) => {
+        const matchesSearch = matchesConsentSearch(item, searchTerm);
+        const matchesCity = cityFilter ? grouping.city === cityFilter : true;
+        const matchesSchool = schoolFilter ? matchesSchoolSearch(item, schoolFilter) : true;
+        const matchesGrade = gradeFilter ? grouping.grade === gradeFilter : true;
+        const matchesClass = classFilter ? grouping.cls === classFilter : true;
         return matchesSearch && matchesCity && matchesSchool && matchesGrade && matchesClass;
-    }).sort((a, b) => {
+    }).sort((left, right) => {
+        const a = left.record;
+        const b = right.record;
         const direction = sortState.direction === 'asc' ? 1 : -1;
         let comparison = 0;
 
         switch (sortState.key) {
             case 'citySchool':
-                comparison = `${a.city || ''} ${a.school || ''}`.localeCompare(
-                    `${b.city || ''} ${b.school || ''}`,
+                comparison = `${left.grouping.city} ${left.grouping.school}`.localeCompare(
+                    `${right.grouping.city} ${right.grouping.school}`,
                     'zh-Hant-TW',
                     { numeric: true, sensitivity: 'base' },
                 );
@@ -196,7 +220,9 @@ const AdminDashboard: React.FC = () => {
             case 'grade':
             case 'cls':
             case 'seat':
-                comparison = Number(a[sortState.key]) - Number(b[sortState.key]);
+                comparison = left.grouping[sortState.key].localeCompare(
+                    right.grouping[sortState.key], 'zh-Hant-TW', { numeric: true, sensitivity: 'base' },
+                );
                 break;
             case 'isAgreed':
                 comparison = (a.isAgreed === true ? 1 : a.isAgreed === false ? 0 : -1) - (b.isAgreed === true ? 1 : b.isAgreed === false ? 0 : -1);
@@ -216,6 +242,9 @@ const AdminDashboard: React.FC = () => {
 
         return comparison * direction;
     });
+    // 保留原填紀錄，ZIP 匯出由共用工具處理歸類。
+    const filteredSignatures = filteredRows.map(({ record }) => record);
+    const needsReviewCount = filteredRows.filter(({ grouping }) => grouping.needsReview).length;
 
     const consentCounts = filteredSignatures.reduce((counts, item) => {
         if (item.isAgreed === true) counts.agreed += 1;
@@ -246,13 +275,13 @@ const AdminDashboard: React.FC = () => {
         }
     };
 
-    const grades = Array.from(new Set(signatures.map(s => s.grade))).sort();
-    const classes = Array.from(new Set(signatures.map(s => normalizeClass(s.cls)))).sort((a, b) => {
-        const numericDifference = Number(a) - Number(b);
-        return Number.isNaN(numericDifference)
-            ? a.localeCompare(b, 'zh-Hant-TW', { numeric: true, sensitivity: 'base' })
-            : numericDifference;
-    });
+    const cities = Array.from(new Set([
+        ...TAIWAN_CITIES, ...normalizedSignatures.map(({ grouping }) => grouping.city).filter(Boolean),
+    ]));
+    const grades = Array.from(new Set(normalizedSignatures.map(({ grouping }) => grouping.grade).filter(Boolean)))
+        .sort((a, b) => a.localeCompare(b, 'zh-Hant-TW', { numeric: true, sensitivity: 'base' }));
+    const classes = Array.from(new Set(normalizedSignatures.map(({ grouping }) => grouping.cls).filter(Boolean)))
+        .sort((a, b) => a.localeCompare(b, 'zh-Hant-TW', { numeric: true, sensitivity: 'base' }));
 
     return (
         <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans relative overflow-hidden">
@@ -366,7 +395,7 @@ const AdminDashboard: React.FC = () => {
                             className="w-full pl-12 pr-4 py-3.5 rounded-2xl border-2 border-gray-100 focus:border-vibrant-teal focus:ring-4 focus:ring-vibrant-teal/10 bg-white/50 focus:bg-white outline-none transition-all appearance-none cursor-pointer font-medium text-gray-700"
                         >
                             <option value="">所有縣市</option>
-                            {TAIWAN_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                            {cities.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                     </div>
 
@@ -408,8 +437,9 @@ const AdminDashboard: React.FC = () => {
 
                 <div className="mb-6 bg-white/90 rounded-2xl p-4 border border-blue-100 text-sm text-gray-600 space-y-2">
                     <p className="font-bold text-gray-800">
-                        目前篩選：{filteredSignatures.length} 筆｜同意 {consentCounts.agreed} 筆｜不同意 {consentCounts.disagreed} 筆｜意願未記錄 {consentCounts.unknown} 筆
+                        目前篩選：{filteredSignatures.length} 筆｜同意 {consentCounts.agreed} 筆｜不同意 {consentCounts.disagreed} 筆｜意願未記錄 {consentCounts.unknown} 筆｜歸類待確認 {needsReviewCount} 筆
                     </p>
+                    <p>學校與班級會依共同規則整理，同名學校按縣市分開；待確認紀錄保留原填內容，請核對後再分送各班。</p>
                     <p>本次打包包含目前篩選的全部資料，不受勾選影響；僅含已送出簽署，無法判定未回覆學生。</p>
                     {packageMessage && (
                         <p
@@ -499,7 +529,7 @@ const AdminDashboard: React.FC = () => {
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
                                         {filteredSignatures.length > 0 ? (
-                                            filteredSignatures.map((item) => (
+                                            filteredRows.map(({ record: item, grouping }) => (
                                                 <motion.tr
                                                     key={item.id}
                                                     initial={{ opacity: 0 }}
@@ -514,23 +544,24 @@ const AdminDashboard: React.FC = () => {
                                                     </td>
                                                     <td className="p-5">
                                                         <div className="flex flex-col">
-                                                            <span className="text-xs text-gray-500 font-bold">{item.city}</span>
-                                                            <span className="text-sm font-bold text-gray-700">{item.school}</span>
+                                                            <span className="text-xs text-gray-500 font-bold">{grouping.city}</span>
+                                                            <span className="text-sm font-bold text-gray-700">{grouping.school}</span>
+                                                            <GroupingNote record={item} grouping={grouping} />
                                                         </div>
                                                     </td>
                                                     <td className="p-5">
                                                         <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-bold shadow-sm border border-blue-200">
-                                                            {item.grade}
+                                                            {grouping.grade}
                                                         </span>
                                                     </td>
                                                     <td className="p-5">
                                                         <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm font-bold shadow-sm border border-purple-200">
-                                                            {normalizeClass(item.cls)}
+                                                            {grouping.cls}
                                                         </span>
                                                     </td>
                                                     <td className="p-5">
                                                         <span className="bg-pink-100 text-pink-700 px-3 py-1 rounded-full text-sm font-bold shadow-sm border border-pink-200">
-                                                            {item.seat}
+                                                            {grouping.seat}
                                                         </span>
                                                     </td>
                                                     <td className="p-5 font-bold text-gray-800 text-lg">{item.studentName}</td>
@@ -599,7 +630,7 @@ const AdminDashboard: React.FC = () => {
                             {/* Mobile Card View */}
                             <div className="md:hidden p-4 space-y-4 bg-gray-50/50">
                                 {filteredSignatures.length > 0 ? (
-                                    filteredSignatures.map((item) => (
+                                    filteredRows.map(({ record: item, grouping }) => (
                                         <motion.div
                                             key={item.id}
                                             initial={{ opacity: 0, y: 20 }}
@@ -619,7 +650,7 @@ const AdminDashboard: React.FC = () => {
                                                     <div className="flex flex-col items-center gap-1">
                                                         <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">座號</span>
                                                         <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center text-xl font-bold shadow-lg shadow-blue-500/20">
-                                                            {item.seat}
+                                                            {grouping.seat}
                                                         </div>
                                                     </div>
                                                     <div>
@@ -628,18 +659,19 @@ const AdminDashboard: React.FC = () => {
                                                         </h3>
                                                         <div className="flex gap-2 mt-1.5 flex-wrap">
                                                             <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-md text-xs font-bold border border-teal-100 flex items-center gap-1">
-                                                                <School size={10} /> {item.city} {item.school}
+                                                                <School size={10} /> {grouping.city} {grouping.school}
                                                             </span>
                                                             <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md text-xs font-bold border border-blue-100 flex items-center gap-1">
-                                                                <User size={10} /> {item.grade}年
+                                                                <User size={10} /> {grouping.grade}年
                                                             </span>
                                                             <span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded-md text-xs font-bold border border-purple-100 flex items-center gap-1">
-                                                                <Users size={10} /> {normalizeClass(item.cls)}班
+                                                                <Users size={10} /> {grouping.cls}班
                                                             </span>
                                                             <span className={`${item.isAgreed === true ? 'bg-green-50 text-green-700 border-green-100' : item.isAgreed === false ? 'bg-red-50 text-red-700 border-red-100' : 'bg-gray-50 text-gray-600 border-gray-100'} px-2 py-0.5 rounded-md text-xs font-bold border flex items-center gap-1`}>
                                                                 {getConsentStatus(item.isAgreed)}
                                                             </span>
                                                         </div>
+                                                        <GroupingNote record={item} grouping={grouping} />
                                                     </div>
                                                 </div>
                                                 <button
