@@ -67,13 +67,19 @@ export default function ServiceWorkerUpdatePrompt() {
         setNotice({ kind: 'chunk-recovery' });
         void (async () => {
             try {
+                // 同網域（cagoooo.github.io）所有工具共用註冊與快取，只清本工具自己的
+                const ownScope = new URL(import.meta.env.BASE_URL, window.location.origin).href;
                 if ('serviceWorker' in navigator) {
                     const registrations = await navigator.serviceWorker.getRegistrations();
-                    await Promise.all(registrations.map((registration) => registration.unregister()));
+                    await Promise.all(registrations
+                        .filter((registration) => registration.scope.startsWith(ownScope))
+                        .map((registration) => registration.unregister()));
                 }
                 if ('caches' in window) {
                     const cacheKeys = await caches.keys();
-                    await Promise.all(cacheKeys.map((cacheKey) => caches.delete(cacheKey)));
+                    await Promise.all(cacheKeys
+                        .filter((cacheKey) => cacheKey.startsWith('signature-'))
+                        .map((cacheKey) => caches.delete(cacheKey)));
                 }
             } catch (error) {
                 console.warn('[SW] chunk 自癒清理失敗，仍會重新載入頁面', error);
