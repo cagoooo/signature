@@ -50,7 +50,21 @@ function formatTimestamp(value) {
   }
 }
 
-function buildChatPayload({ cardId, title, subtitle, summary, rows }) {
+// 手機推播只看得到摘要那一行，所以摘要與卡片標題都要寫出平台名稱
+const APP_NAME = '家長線上簽名系統';
+
+function withPlatformSummary(title, summary, appName) {
+  if (summary.includes(`【${appName}】`)) return summary;
+  const icon = String(title).split(' ')[0];
+  return `${icon} 【${appName}】${summary}`;
+}
+
+function withPlatformTitle(title, appName) {
+  return title.endsWith(`｜${appName}`) ? title : `${title}｜${appName}`;
+}
+
+function buildChatPayload({ cardId, title, subtitle = APP_NAME, summary, rows }) {
+  const appName = subtitle || APP_NAME;
   const widgets = [
     { textParagraph: { text: escapeHtml(summary) } },
     ...rows.map(({ label, text }) => ({
@@ -63,12 +77,12 @@ function buildChatPayload({ cardId, title, subtitle, summary, rows }) {
   ];
 
   return {
-    text: summary,
+    text: withPlatformSummary(title, summary, appName),
     cardsV2: [{
       cardId,
       card: {
         header: {
-          title: escapeHtml(title),
+          title: escapeHtml(withPlatformTitle(title, appName)),
           subtitle: escapeHtml(subtitle),
         },
         sections: [{ widgets }],
@@ -117,7 +131,7 @@ function signatureSuccessPayload(signatureId, data) {
   return buildChatPayload({
     cardId: `signature-success-${signatureId}`,
     title: '✅ 簽名提交成功',
-    subtitle: '家長線上簽名系統',
+    subtitle: APP_NAME,
     summary,
     rows: [
       { label: '狀態', text: '成功' },
@@ -184,7 +198,7 @@ exports.reportSignatureFailure = onCall(
     const payload = buildChatPayload({
       cardId: `signature-failure-${Date.now()}`,
       title: recordSaved ? '⚠️ 簽名已保存，後續處理失敗' : '❌ 簽名服務失敗',
-      subtitle: '家長線上簽名系統',
+      subtitle: APP_NAME,
       summary,
       rows: [
         { label: '狀態', text: recordSaved ? '部分成功' : '失敗' },
